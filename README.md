@@ -4,6 +4,8 @@ A web app that helps a family share the care of an ageing parent: medicine remin
 
 Built with React 19, Vite 8, Tailwind CSS v4 and react-router 7. The backend is Supabase (project `ksnmbtlicmmzfwhwcicv`).
 
+Live site: https://carecircle-iimb.vercel.app (hosted on Vercel; every merge to `main` deploys it, and every pull request gets its own preview link).
+
 This code was moved from Figma Make on 2026-11-06. GitHub is now the source of truth; the Figma Make file is an archive.
 
 ## Run it locally
