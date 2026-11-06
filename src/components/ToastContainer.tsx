@@ -5,7 +5,7 @@ import type { Toast } from '../types'
 
 function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) {
   const [visible, setVisible] = useState(false)
-  const [text, bonus] = toast.message.split(' · +')
+  const text = toast.message
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true))
@@ -58,7 +58,6 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) 
       <p className="text-sm font-medium flex-1 leading-snug" style={{ color: config.textColor }}>
         {text}
       </p>
-      {bonus && <span className="cc-toast-xp">+{bonus}</span>}
       <button
         onClick={onRemove}
         className="flex-shrink-0 rounded-md p-0.5 transition-opacity opacity-60 hover:opacity-100"

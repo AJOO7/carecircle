@@ -8,7 +8,6 @@ import { api, ApiError, supabase } from './lib/supabase'
 import { acknowledgementFor, classifyParentConsentReply, classifyParentReply } from './constants/replyClassifier'
 import { BUILT_IN_MEDICINE_PHOTOS } from './lib/medicinePhotos'
 import { buildWeeklyDigest, mostRecentDigestDelivery, nextSundayAtSix } from './lib/weeklyDigest'
-import { pointsNote } from './lib/careEvents'
 import { parentConsentMessages } from './constants/parentConsent'
 import { interpretReply } from './lib/assistant'
 import { buildSampleCircle } from './lib/sampleData'
@@ -1667,7 +1666,7 @@ export function AppProvider({ children, now: baseNow = systemNow, sample = false
         text: `${current.currentUser?.name ?? 'A family member'} is calling them`,
       }
       const careEvents = [...current.careEvents, careEvent]
-      commitModules({ careEvents }, value => ({ ...value, careEvents }), careEvent.text + pointsNote(current.careEvents, careEvent))
+      commitModules({ careEvents }, value => ({ ...value, careEvents }), careEvent.text)
     },
     recordCallUnanswered(alertId, nextStep) {
       const current = stateRef.current
@@ -1971,7 +1970,7 @@ export function AppProvider({ children, now: baseNow = systemNow, sample = false
         text: `${current.currentUser.name} took ${task.title}.`,
       }
       const careEvents = [...current.careEvents, event]
-      commitModules({ tasks, careEvents }, value => ({ ...value, tasks, careEvents }), `${current.currentUser.name} took the task${pointsNote(current.careEvents, event)}`)
+      commitModules({ tasks, careEvents }, value => ({ ...value, tasks, careEvents }), `${current.currentUser.name} took the task`)
     },
     respondToTask(taskId, response, reason) {
       const current = stateRef.current
@@ -1994,7 +1993,7 @@ export function AppProvider({ children, now: baseNow = systemNow, sample = false
           : `${actorName} can't do this${reason?.trim() ? `: ${reason.trim()}` : '.'}`,
       }
       const careEvents = [...current.careEvents, event]
-      commitModules({ tasks, careEvents }, value => ({ ...value, tasks, careEvents }), accepted ? `${actorName} accepted${pointsNote(current.careEvents, event)}` : `${actorName} declined`)
+      commitModules({ tasks, careEvents }, value => ({ ...value, tasks, careEvents }), accepted ? `${actorName} accepted` : `${actorName} declined`)
     },
     completeTask(taskId) {
       const current = stateRef.current
@@ -2010,7 +2009,7 @@ export function AppProvider({ children, now: baseNow = systemNow, sample = false
         actorType: 'member', actorId: current.currentUser?.id ?? '', text: `${actorName} completed ${task.title}.`,
       }
       const careEvents = [...current.careEvents, event]
-      commitModules({ tasks, careEvents }, value => ({ ...value, tasks, careEvents }), `${actorName} completed the task${pointsNote(current.careEvents, event)}`)
+      commitModules({ tasks, careEvents }, value => ({ ...value, tasks, careEvents }), `${actorName} completed the task`)
     },
     addHealthEntry(entry) {
       const current = stateRef.current
@@ -2097,7 +2096,7 @@ export function AppProvider({ children, now: baseNow = systemNow, sample = false
         text: `${current.currentUser?.name ?? 'A circle member'} replenished ${medicineName ?? 'medicine'} stock.`,
       }
       const careEvents = [...current.careEvents, event]
-      commitModules({ medications: allPatientRecords(current, 'medications', medications), tasks, careEvents }, value => ({ ...value, medications, tasks, careEvents }), 'Stock replenished' + pointsNote(current.careEvents, event))
+      commitModules({ medications: allPatientRecords(current, 'medications', medications), tasks, careEvents }, value => ({ ...value, medications, tasks, careEvents }), 'Stock replenished')
     },
     saveAppointment(appointment) {
       const current = stateRef.current
