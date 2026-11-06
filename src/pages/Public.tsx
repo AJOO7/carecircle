@@ -37,6 +37,12 @@ const VIEW_NAMES: Partial<Record<View, [title: string, noun: string]>> = {
   digest: ['The weekly digest is in your own circle', 'the weekly digest'],
 }
 
+const SAMPLE_NAV: [string, string, typeof HomeIcon][] = [
+  ['/sample', 'Today', HomeIcon],
+  ['/sample/medicines', 'Medicines', PillIcon],
+  ['/sample/circle', 'Circle', UsersIcon],
+]
+
 export function SampleShell() {
   const { state, actions } = useApp()
   const navigate = useNavigate()
@@ -64,17 +70,18 @@ export function SampleShell() {
     <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
       <div className="max-w-[1440px] mx-auto px-4 lg:px-8 h-16 flex items-center gap-4">
         <Link to="/" className="flex items-center gap-2 mr-auto"><span className="w-9 h-9 rounded-xl bg-[#DEEDE7] flex items-center justify-center"><HeartIcon className="w-5 h-5 text-[#346B63]" /></span><strong className="text-slate-800">CareCircle sample</strong></Link>
-        <nav className="flex items-center gap-1" aria-label="Sample navigation">
-          {[
-            ['/sample', 'Today', HomeIcon],
-            ['/sample/medicines', 'Medicines', PillIcon],
-            ['/sample/circle', 'Circle', UsersIcon],
-          ].map(([to, label, Icon]) => <NavLink key={to as string} to={to as string} end={to === '/sample'} className={({ isActive }) => `flex items-center gap-2 min-h-10 px-3 rounded-xl text-sm font-semibold ${isActive ? 'bg-[#E9F1EC] text-[#346B63]' : 'text-slate-500'}`}><Icon className="w-4 h-4" />{label as string}</NavLink>)}
+        <nav className="hidden md:flex items-center gap-1" aria-label="Sample navigation">
+          {SAMPLE_NAV.map(([to, label, Icon]) => <NavLink key={to} to={to} end={to === '/sample'} className={({ isActive }) => `flex items-center gap-2 min-h-11 px-3 rounded-xl text-sm font-semibold ${isActive ? 'bg-[#E9F1EC] text-[#346B63]' : 'text-slate-500'}`}><Icon className="w-4 h-4" />{label}</NavLink>)}
         </nav>
-        <Button variant="ghost" onClick={() => actions.togglePhonePane()}><ChatBubbleIcon className="w-4 h-4" /> Parent phone</Button>
+        <span className="hidden md:block"><Button variant="ghost" onClick={() => actions.togglePhonePane()}><ChatBubbleIcon className="w-4 h-4" /> Parent phone</Button></span>
       </div>
     </header>
-    <main className="max-w-[1440px] mx-auto px-4 py-6 lg:px-8 lg:py-8"><Outlet /></main>
+    <main className="max-w-[1440px] mx-auto px-4 pt-6 pb-28 md:pb-8 lg:px-8 lg:py-8"><Outlet /></main>
+    {/* Phones: the same bottom tab bar the signed-in app uses, so the header never runs off the screen. */}
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 flex bg-[#FFFEFB] border-t border-[#E3E8E0]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} aria-label="Sample navigation">
+      {SAMPLE_NAV.map(([to, label, Icon]) => <NavLink key={to} to={to} end={to === '/sample'} className={({ isActive }) => `cc-tab flex-1 min-w-0 flex flex-col items-center justify-center gap-1 py-2 ${isActive ? 'text-[#14574A]' : 'text-slate-500'}`}><span className="cc-tab-icon"><Icon className="w-5 h-5" /></span><span className="text-[12px] font-semibold">{label}</span></NavLink>)}
+      <button type="button" onClick={() => actions.togglePhonePane()} className={`cc-tab flex-1 min-w-0 flex flex-col items-center justify-center gap-1 py-2 ${state.phonePaneOpen ? 'text-[#14574A]' : 'text-slate-500'}`} aria-pressed={state.phonePaneOpen}><span className="cc-tab-icon"><ChatBubbleIcon className="w-5 h-5" /></span><span className="text-[12px] font-semibold">Parent phone</span></button>
+    </nav>
     {state.alertDetailId && <AlertDetailModal />}
     {state.confirmConfig && <ConfirmModal />}
     <PhonePane />
