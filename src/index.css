@@ -289,3 +289,6 @@ div[class*="F5E8C8"]{position:sticky;top:0;z-index:30;font-size:14px;font-weight
 .cc-summary button:hover { background:#F1F7F3; border-color:#B7D3C6; }
 .cc-summary button.cc-summary-warn { background:#FFF3DC; border-color:#EADBB7; color:#75541B; }
 @media (max-width:640px) { .cc-dashboard-heading { padding:20px !important; } .cc-attention .cc-section-heading > div { flex:1 1 100%; } }
+
+/* ---- Late dose marker: icon plus words, not colour alone ---- */
+.cc-late { display:inline-flex; align-items:center; gap:4px; margin-bottom:4px; padding:2px 8px; border-radius:999px; background:#FDE8E2; color:#8A2E1C; font-size:12px; font-weight:700; line-height:1.5; white-space:nowrap; }
