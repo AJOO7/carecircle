@@ -1,0 +1,11 @@
+{
+  "title": "CareCircle",
+  "description": "Streamline remote family caregiving with a responsive dashboard for managing medication alerts, task assignments, and medical documents, ensuring coordinated care.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
