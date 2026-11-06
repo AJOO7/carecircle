@@ -70,10 +70,14 @@ export function buildSampleCircle(now: Date): CircleData {
     source: scheduledDate === today ? 'Sample reminder schedule' : 'Schedule history',
     createdAt: atTime(scheduledDate === today ? now : yesterdayDate, Number(scheduledTime.slice(0, 2)), Number(scheduledTime.slice(3))).toISOString(),
   })
+  // Only doses whose time has passed get a reminder, so nothing says 'Reminder sent' before it is due.
+  const dueAt = (time: string) => atTime(now, Number(time.slice(0, 2)), Number(time.slice(3)))
+  const sentAt = (time: string, fallbackMinutes: number) => dueAt(time) <= now ? dueAt(time) : minutesBefore(now, fallbackMinutes)
+  const eveningDue = dueAt('20:00') <= now
   const alerts = [
     alert('sample-alert-metformin', 'sample-metformin', 'Metformin', '500 mg', '08:30', 'Confirmed'),
     { ...alert('sample-alert-amlodipine', 'sample-amlodipine', 'Amlodipine', '5 mg', '09:00', 'Assigned'), assignedTo: 'sample-vikram' },
-    alert('sample-alert-atorvastatin', 'sample-atorvastatin', 'Atorvastatin', '10 mg', '20:00', 'Unconfirmed'),
+    ...(eveningDue ? [alert('sample-alert-atorvastatin', 'sample-atorvastatin', 'Atorvastatin', '10 mg', '20:00', 'Unconfirmed')] : []),
     alert('sample-alert-earlier', 'sample-metformin', 'Metformin', '500 mg', '20:30', 'Not recorded', yesterday),
   ]
   const tasks = [
@@ -84,8 +88,8 @@ export function buildSampleCircle(now: Date): CircleData {
     { id: 'sample-event-reminder', at: atTime(now, 8, 30).toISOString(), kind: 'reminder_sent' as const, patientId, alertId: 'sample-alert-metformin', actorType: 'system' as const, actorId: 'care-circle', text: 'Reminder sent for Metformin 500 mg at 08:30.' },
     { id: 'sample-event-reply', at: atTime(now, 8, 42).toISOString(), kind: 'parent_replied' as const, patientId, alertId: 'sample-alert-metformin', actorType: 'parent' as const, actorId: `parent-${patientId}`, rawText: 'Le li, thank you', replyCategory: 'taken' as const, text: 'Lakshmi wrote: "Le li, thank you"' },
     { id: 'sample-event-task', at: atTime(now, 9, 5).toISOString(), kind: 'task_assigned' as const, patientId, taskId: 'sample-task-refill', actorType: 'member' as const, actorId: 'sample-anita', targetId: 'sample-vikram', text: 'Vikram was assigned Refill Amlodipine.' },
-    { id: 'sample-event-reminder-atorvastatin', at: minutesBefore(now, 15).toISOString(), kind: 'reminder_sent' as const, patientId, alertId: 'sample-alert-atorvastatin', actorType: 'system' as const, actorId: 'care-circle', text: 'Atorvastatin 10 mg.' },
-    { id: 'sample-event-reminder-amlodipine', at: minutesBefore(now, 5).toISOString(), kind: 'reminder_sent' as const, patientId, alertId: 'sample-alert-amlodipine', actorType: 'system' as const, actorId: 'care-circle', text: 'Amlodipine 5 mg.' },
+    ...(eveningDue ? [{ id: 'sample-event-reminder-atorvastatin', at: dueAt('20:00').toISOString(), kind: 'reminder_sent' as const, patientId, alertId: 'sample-alert-atorvastatin', actorType: 'system' as const, actorId: 'care-circle', text: 'Atorvastatin 10 mg.' }] : []),
+    { id: 'sample-event-reminder-amlodipine', at: sentAt('09:00', 5).toISOString(), kind: 'reminder_sent' as const, patientId, alertId: 'sample-alert-amlodipine', actorType: 'system' as const, actorId: 'care-circle', text: 'Amlodipine 5 mg.' },
   ]
   const appointmentDate = new Date(now)
   appointmentDate.setDate(now.getDate() + 3)

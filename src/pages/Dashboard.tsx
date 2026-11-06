@@ -11,14 +11,10 @@ import { currentNextStep } from '../lib/nextStep'
 import { prioritizedDashboardNudge } from '../lib/nudges'
 import { dismissFor14Days, isDismissed } from '../lib/dismissals'
 import { DayStrip } from '../components/DayStrip'
-function fmt12h(time: string) {
-  const [h, m] = time.split(':').map(Number)
-  if (!Number.isFinite(h)) return time
-  return (h % 12 || 12) + ':' + String(m).padStart(2, '0') + (h >= 12 ? ' PM' : ' AM')
-}
+import { clockLabel as fmt12h, clockOf, dayAndClock } from '../lib/time'
 function dueLabel(value: string) {
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value || 'No due date' : date.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+  return Number.isNaN(date.getTime()) ? value || 'No due date' : dayAndClock(date)
 }
 function TaskStatus({ task }: { task: CareTask }) {
   const label = task.status === 'Completed' ? 'Done' : task.response === 'Declined' ? 'Declined' : task.status === 'In progress' ? 'In progress' : task.response === 'Accepted' ? 'Accepted' : task.assigneeId ? 'Awaiting update' : 'Not started'
@@ -168,7 +164,7 @@ export function Dashboard() {
           <div className="cc-attention-title"><h3>{title}</h3>{isTask && item.task.description && <p>{item.task.description}</p>}<span className="cc-due"><CalendarIcon className="w-4 h-4" />{isTask ? dueLabel(item.task.due) : 'Today · ' + fmt12h(item.alert.scheduledTime)}</span></div>
           <div className="cc-owner"><span className="cc-label">Owner</span><div>{owner && <span className="cc-avatar cc-avatar-small">{owner.initials}</span>}<span>{owner?.name || 'Unassigned'}</span></div></div>
           <div className="cc-row-status"><span className="cc-label">Status</span>{isTask ? <TaskStatus task={item.task} /> : <AlertSourceStatus alert={item.alert} />}</div>
-          <Button variant="secondary" className="cc-view-task" onClick={() => isTask ? actions.setView('tasks') : actions.openAlertDetail(id)}>{isTask && !owner && canWrite ? 'Assign' : 'View task'}</Button>
+          <Button variant="secondary" className="cc-view-task" onClick={() => isTask ? actions.setView('tasks') : actions.openAlertDetail(id)}>{isTask ? (!owner && canWrite ? 'Assign' : 'View task') : 'Follow up'}</Button>
         </div>
       })}
       {count > attention.length && <button className="cc-text-link cc-more" onClick={() => actions.setView(openTasks.length > 3 ? 'tasks' : 'medicines')}>Review more care items <ChevronRightIcon className="w-4 h-4" /></button>}
@@ -197,9 +193,9 @@ export function Dashboard() {
         </section>}
       </div>
       <aside className="cc-side-column cc-surface">
-        <section aria-labelledby="next-appointment-heading"><h2 id="next-appointment-heading">Next appointment</h2>{nextAppt ? <><div className="cc-appointment"><span className="cc-icon-tile"><CalendarIcon className="w-6 h-6" /></span><div><h3>{nextAppt.type}</h3><p>{nextAppt.location || nextAppt.doctor}</p></div></div><p className="cc-appointment-date">{new Date(nextAppt.datetime).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · {new Date(nextAppt.datetime).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })}</p><Button className="cc-prepare" onClick={openAppointment}><CalendarIcon className="w-5 h-5" />Prepare for visit</Button></> : <div className="cc-side-empty"><p>No upcoming appointment.</p><Button variant="secondary" onClick={() => actions.setView('appointments')}>View appointments</Button></div>}</section>
+        <section aria-labelledby="next-appointment-heading"><h2 id="next-appointment-heading">Next appointment</h2>{nextAppt ? <><div className="cc-appointment"><span className="cc-icon-tile"><CalendarIcon className="w-6 h-6" /></span><div><h3>{nextAppt.type}</h3><p>{nextAppt.location || nextAppt.doctor}</p></div></div><p className="cc-appointment-date">{new Date(nextAppt.datetime).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · {clockOf(new Date(nextAppt.datetime))}</p><Button className="cc-prepare" onClick={openAppointment}><CalendarIcon className="w-5 h-5" />Prepare for visit</Button></> : <div className="cc-side-empty"><p>No upcoming appointment.</p><Button variant="secondary" onClick={() => actions.setView('appointments')}>View appointments</Button></div>}</section>
         {patient && stage >= 4 && <HelpedThisWeek patientId={activePatientId} />}
-        <section className="cc-latest" aria-labelledby="latest-update-heading"><h2 id="latest-update-heading">Latest update</h2>{events[0] ? <><div className="cc-update-note">{eventTextForMember(events[0], patient, state.currentUser?.id)}</div><p className="cc-event-meta"><ClockIcon className="w-4 h-4" />{memberFor(events[0].actorId)?.name || (events[0].actorType === 'parent' ? patient?.parentChannel.preferredName : 'CareCircle')} · {new Date(events[0].at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</p><button className="cc-text-link" onClick={() => actions.setView('timeline')}>View care timeline <ChevronRightIcon className="w-4 h-4" /></button></> : <p className="cc-side-empty">Care updates will appear here as your circle records activity.</p>}</section>
+        <section className="cc-latest" aria-labelledby="latest-update-heading"><h2 id="latest-update-heading">Latest update</h2>{events[0] ? <><div className="cc-update-note">{eventTextForMember(events[0], patient, state.currentUser?.id)}</div><p className="cc-event-meta"><ClockIcon className="w-4 h-4" />{memberFor(events[0].actorId)?.name || (events[0].actorType === 'parent' ? patient?.parentChannel.preferredName : 'CareCircle')} · {dayAndClock(new Date(events[0].at))}</p><button className="cc-text-link" onClick={() => actions.setView('timeline')}>View care timeline <ChevronRightIcon className="w-4 h-4" /></button></> : <p className="cc-side-empty">Care updates will appear here as your circle records activity.</p>}</section>
       </aside>
     </div>
   </div>

@@ -1,9 +1,8 @@
 import type { CareEvent, CircleMember, MedicationAlert, Patient } from '../types'
+import { clockOf } from './time'
 
 export function shortTime(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value)
-  const hours = date.getHours()
-  return `${hours % 12 || 12}:${String(date.getMinutes()).padStart(2, '0')}`
+  return clockOf(value instanceof Date ? value : new Date(value))
 }
 
 export function latestAlertEvent(alertId: string, events: CareEvent[]) {

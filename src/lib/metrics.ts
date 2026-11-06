@@ -1,3 +1,4 @@
+import { clockLabel } from './time'
 import type { AppState } from '../types'
 import { canMemberSeeParentReplies } from './careEvents'
 
@@ -28,7 +29,7 @@ export function dayClosure(state: AppState, now = new Date()) {
     ...todayTasks.map(task => `task:${task.id}`),
   ])
   const openItems = [
-    ...todayAlerts.filter(alert => !closedToday.has(`alert:${alert.id}`)).map(alert => ({ label: `${alert.medicationName} at ${alert.scheduledTime}`, at: `${today}T${alert.scheduledTime}` })),
+    ...todayAlerts.filter(alert => !closedToday.has(`alert:${alert.id}`)).map(alert => ({ label: `${alert.medicationName} at ${clockLabel(alert.scheduledTime)}`, at: `${today}T${alert.scheduledTime}` })),
     ...todayTasks.filter(task => !closedToday.has(`task:${task.id}`)).map(task => ({ label: task.title, at: task.due })),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
   const weekStart = now.getTime() - 7 * 24 * 60 * 60 * 1000
@@ -51,7 +52,7 @@ export function dayClosure(state: AppState, now = new Date()) {
     totalToday: todayAlerts.length + todayTasks.length,
     next: openItems[0]?.label,
     closedThisWeek,
-    tomorrowPreview: now.getHours() >= 17 && firstTomorrowDose ? `${firstTomorrowDose.name} at ${firstTomorrowDose.scheduleTime}` : undefined,
+    tomorrowPreview: now.getHours() >= 17 && firstTomorrowDose ? `${firstTomorrowDose.name} at ${clockLabel(firstTomorrowDose.scheduleTime)}` : undefined,
     quotedReply: quotedReply ? { speaker: patient?.parentChannel.preferredName ?? 'Parent', text: quotedReply.rawText! } : undefined,
   }
 }

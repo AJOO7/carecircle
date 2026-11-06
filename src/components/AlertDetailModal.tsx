@@ -6,13 +6,8 @@ import type { MedicationAlert } from '../types'
 import { activeClaim, canMemberSeeParentReplies, latestParentReply, parentReplyCategoryLabel, shortTime } from '../lib/careEvents'
 import { useGate } from '../auth/Gate'
 import { Button } from './ui'
+import { clockLabel as fmt12h } from '../lib/time'
 
-function fmt12h(time: string) {
-  const [h, m] = time.split(':').map(Number)
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  const h12 = h % 12 || 12
-  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
-}
 
 function fmtDatetime(iso: string) {
   const d = new Date(iso)
