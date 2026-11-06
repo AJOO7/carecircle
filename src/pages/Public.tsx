@@ -1,13 +1,14 @@
-import { Link, NavLink, Outlet, useSearchParams } from 'react-router'
-import { useEffect } from 'react'
+import { Link, NavLink, Outlet, useNavigate, useSearchParams } from 'react-router'
+import { useEffect, useState } from 'react'
 import { useAuthStatus } from '../auth/AuthStatus'
-import { Button, Card } from '../components/ui'
+import { Button, Card, Dialog } from '../components/ui'
 import { HeartIcon, PillIcon, UsersIcon, HomeIcon, ChatBubbleIcon } from '../components/icons'
 import { useApp } from '../context'
 import { AlertDetailModal } from '../components/AlertDetailModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { PhonePane } from '../components/PhonePane'
 import { ToastContainer } from '../components/ToastContainer'
+import type { View } from '../types'
 
 export function PublicLanding() {
   const auth = useAuthStatus()
@@ -25,8 +26,28 @@ export function PublicLanding() {
   </main>
 }
 
+// The sample is routed by URL, but dashboard buttons ask the app to switch views. Pages the sample
+// has are opened by address; the rest explain that they live in the family's own circle.
+const SAMPLE_PATHS: Partial<Record<View, string>> = { today: '/sample', medicines: '/sample/medicines', circle: '/sample/circle' }
+const VIEW_NAMES: Partial<Record<View, [title: string, noun: string]>> = {
+  tasks: ['Care tasks are in your own circle', 'care tasks'],
+  appointments: ['Appointments are in your own circle', 'appointments'],
+  timeline: ['The care timeline is in your own circle', 'the care timeline'],
+  documents: ['Records are in your own circle', 'records'],
+  digest: ['The weekly digest is in your own circle', 'the weekly digest'],
+}
+
 export function SampleShell() {
   const { state, actions } = useApp()
+  const navigate = useNavigate()
+  const [ownCircleView, setOwnCircleView] = useState<View | null>(null)
+  useEffect(() => {
+    if (state.view === 'today') return
+    const path = SAMPLE_PATHS[state.view]
+    if (path) navigate(path)
+    else setOwnCircleView(state.view)
+    actions.setView('today')
+  }, [actions, navigate, state.view])
   const [searchParams, setSearchParams] = useSearchParams()
   useEffect(() => {
     const action = searchParams.get('action')
@@ -58,5 +79,13 @@ export function SampleShell() {
     {state.confirmConfig && <ConfirmModal />}
     <PhonePane />
     <ToastContainer />
+    {ownCircleView && <Dialog title={VIEW_NAMES[ownCircleView]?.[0] ?? 'This page is in your own circle'} onClose={() => setOwnCircleView(null)}>
+      <p className="text-sm text-slate-600">The sample shows Today, Medicines and Circle. Log in or create an account to open {VIEW_NAMES[ownCircleView]?.[1] ?? 'this page'} for your own family.</p>
+      <div className="grid grid-cols-2 gap-3 mt-5">
+        <Link to="/login"><Button className="w-full">Log in</Button></Link>
+        <Link to="/create-account"><Button variant="secondary" className="w-full">Create account</Button></Link>
+      </div>
+      <button type="button" className="cc-text-link mt-3" onClick={() => setOwnCircleView(null)}>Keep exploring the sample</button>
+    </Dialog>}
   </div>
 }
