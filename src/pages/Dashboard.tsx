@@ -11,7 +11,7 @@ import { currentNextStep } from '../lib/nextStep'
 import { prioritizedDashboardNudge } from '../lib/nudges'
 import { dismissFor14Days, isDismissed } from '../lib/dismissals'
 import { DayStrip } from '../components/DayStrip'
-import { clockLabel as fmt12h, clockOf, dayAndClock } from '../lib/time'
+import { clockLabel as fmt12h, clockOf, dayAndClock, lateBy } from '../lib/time'
 function dueLabel(value: string) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value || 'No due date' : dayAndClock(date)
@@ -100,7 +100,12 @@ export function Dashboard() {
   const replyAlert = alerts.find(alert => alert.id === firstReply?.alertId)
   const memberFor = (id?: string) => state.members.find(member => (member.userId ?? member.id) === id)
   const activeMeds = medications.filter(medicine => medicine.status !== 'Stopped' && (!medicine.patientId || medicine.patientId === activePatientId)).sort((a, b) => a.scheduleTime.localeCompare(b.scheduleTime))
-  const attention = [...openTasks.slice(0, 3).map(task => ({ kind: 'task' as const, task })), ...followups.slice(0, Math.max(0, 3 - openTasks.length)).map(alert => ({ kind: 'alert' as const, alert }))]
+  // Order by urgency: every dose follow-up first (earliest, so most overdue, first), then tasks with
+  // no owner, then the rest by due date. Doses are never cut off; tasks fill up to three rows.
+  const doseItems = [...followups].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)).map(alert => ({ kind: 'alert' as const, alert }))
+  const taskItems = [...openTasks].sort((a, b) => Number(Boolean(a.assigneeId)) - Number(Boolean(b.assigneeId))).slice(0, Math.max(0, 3 - doseItems.length)).map(task => ({ kind: 'task' as const, task }))
+  const attention = [...doseItems, ...taskItems]
+  const isUrgent = (item: (typeof attention)[number]) => item.kind === 'alert' ? item.alert.status === 'Missed' || lateBy(item.alert.scheduledDate, item.alert.scheduledTime, time) > 0 : !item.task.assigneeId || item.task.response === 'Declined'
   const unowned = openTasks.filter(task => !task.assigneeId).length + followups.filter(alert => !alert.assignedTo).length
   const shownTaskIds = new Set(attention.flatMap(item => item.kind === 'task' ? [item.task.id] : []))
   const shownMedIds = new Set(attention.flatMap(item => item.kind === 'alert' ? [item.alert.medicationId] : []))
@@ -159,7 +164,7 @@ export function Dashboard() {
         const id = isTask ? item.task.id : item.alert.id
         const owner = memberFor(isTask ? item.task.assigneeId : item.alert.assignedTo)
         const title = isTask ? item.task.title : item.alert.medicationName
-        return <div className="cc-attention-row" key={item.kind + id}>
+        return <div className={'cc-attention-row' + (isUrgent(item) ? '' : ' cc-attention-calm')} key={item.kind + id}>
           <div className={'cc-icon-tile ' + (isTask ? 'cc-icon-amber' : '')}>{isTask ? <CheckCircleIcon className="w-5 h-5" /> : <PillIcon className="w-5 h-5" />}</div>
           <div className="cc-attention-title"><h3>{title}</h3>{isTask && item.task.description && <p>{item.task.description}</p>}<span className="cc-due"><CalendarIcon className="w-4 h-4" />{isTask ? dueLabel(item.task.due) : 'Today · ' + fmt12h(item.alert.scheduledTime)}</span></div>
           <div className="cc-owner"><span className="cc-label">Owner</span><div>{owner && <span className="cc-avatar cc-avatar-small">{owner.initials}</span>}<span>{owner?.name || 'Unassigned'}</span></div></div>
@@ -167,13 +172,14 @@ export function Dashboard() {
           <Button variant="secondary" className="cc-view-task" onClick={() => isTask ? actions.setView('tasks') : actions.openAlertDetail(id)}>{isTask ? (!owner && canWrite ? 'Assign' : 'View task') : 'Follow up'}</Button>
         </div>
       })}
-      {count > attention.length && <button className="cc-text-link cc-more" onClick={() => actions.setView(openTasks.length > 3 ? 'tasks' : 'medicines')}>Review more care items <ChevronRightIcon className="w-4 h-4" /></button>}
+      {count > attention.length && <button className="cc-text-link cc-more" onClick={() => actions.setView(taskItems.length < openTasks.length ? 'tasks' : 'medicines')}>Review more care items <ChevronRightIcon className="w-4 h-4" /></button>}
     </section>
     <TodaySummary alerts={todayAlerts} meds={activeMeds} tasks={patientTasks} nextAppt={nextAppt} time={time} onView={view => actions.setView(view)} onAppt={openAppointment} />
     <DayStrip />
     {firstReply?.rawText && patient && canMemberSeeParentReplies(patient, state.currentUser?.id) && !state.dismissedFirstReplyPatientIds.includes(patient.id) && <Card className="cc-first-reply"><div><strong>{patient.parentChannel.preferredName} replied for the first time</strong><p>“{firstReply.rawText}” · {replyAlert?.medicationName ?? 'Medicine reminder'} · {shortTime(firstReply.at)}</p></div><Button variant="ghost" onClick={() => actions.dismissFirstReply(patient.id)}>Dismiss</Button></Card>}
     {nudge && <Card className="p-5 mb-4"><div className="flex items-start justify-between gap-4"><div><strong className="text-slate-800">{nudge.title}</strong><p className="text-sm text-slate-500 mt-1">{nudge.detail}</p></div><Button variant="ghost" onClick={() => dismiss(`nudge:${nudge.id}`)}>{nudge.secondaryLabel}</Button></div>{nudge.primaryLabel && <Button variant="secondary" className="mt-4" onClick={() => { if (nudge.action === 'resend-consent' && patient) actions.sendParentConsent(patient.id); else if (nudge.view) actions.setView(nudge.view) }}>{nudge.primaryLabel}</Button>}</Card>}
-    {!setupHidden && <Card className="p-5 mb-4"><div className="flex items-start justify-between gap-4"><div><strong className="text-slate-800">{setup.complete ? 'Milestones' : `Setting up - ${setup.completed} of 4`}</strong><p className="text-sm text-slate-500 mt-1">{setup.complete ? 'What your circle has in place so far.' : 'A short path to a useful care circle.'}</p></div><Button variant="ghost" onClick={() => dismiss('setup-checklist')}>Hide for 14 days</Button></div><div className="grid sm:grid-cols-2 gap-2 mt-4">{setup.complete ? setup.milestones.map(item => <div key={item.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><span className="font-semibold">{item.complete ? 'Done' : 'Ahead'}</span> · {item.title}</div>) : setup.steps.map(item => <Button variant="secondary" key={item.id} onClick={() => actions.setView(item.view)} className="justify-start text-left"><span className="font-semibold">{item.complete ? 'Done' : 'Next'}</span> · {item.title}</Button>)}</div></Card>}
+    {!setupHidden && setup.complete && <details className="cc-milestones"><summary>Milestones · {setup.milestones.filter(item => item.complete).length} of {setup.milestones.length} in place</summary><div className="grid sm:grid-cols-2 gap-2 mt-3">{setup.milestones.map(item => <div key={item.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><span className="font-semibold">{item.complete ? 'Done' : 'Ahead'}</span> · {item.title}</div>)}</div><button type="button" className="cc-text-link mt-2" onClick={() => dismiss('setup-checklist')}>Hide milestones for 14 days</button></details>}
+    {!setupHidden && !setup.complete && <Card className="p-5 mb-4"><div className="flex items-start justify-between gap-4"><div><strong className="text-slate-800">{setup.complete ? 'Milestones' : `Setting up - ${setup.completed} of 4`}</strong><p className="text-sm text-slate-500 mt-1">{setup.complete ? 'What your circle has in place so far.' : 'A short path to a useful care circle.'}</p></div><Button variant="ghost" onClick={() => dismiss('setup-checklist')}>Hide for 14 days</Button></div><div className="grid sm:grid-cols-2 gap-2 mt-4">{setup.complete ? setup.milestones.map(item => <div key={item.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><span className="font-semibold">{item.complete ? 'Done' : 'Ahead'}</span> · {item.title}</div>) : setup.steps.map(item => <Button variant="secondary" key={item.id} onClick={() => actions.setView(item.view)} className="justify-start text-left"><span className="font-semibold">{item.complete ? 'Done' : 'Next'}</span> · {item.title}</Button>)}</div></Card>}
     {nextStep && <Card className="p-5 my-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Next step</p><div className="flex items-start justify-between gap-4 mt-2"><div><strong className="text-slate-800">{nextStep.title}</strong><p className="text-sm text-slate-500 mt-1">{nextStep.detail}</p></div><div className="flex gap-2"><Button variant="ghost" onClick={() => dismiss(`next-step:${nextStep.id}`)}>Not now</Button><Button onClick={() => actions.setView(nextStep.view)}>Open</Button></div></div></Card>}
     <div className="cc-dashboard-grid">
       <div className="cc-main-column">
