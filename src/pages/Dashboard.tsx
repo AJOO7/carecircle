@@ -1,5 +1,5 @@
 import { useApp } from '../context'
-import { CalendarIcon, CheckCircleIcon, PlusIcon, ChevronRightIcon, PillIcon, UsersIcon, ClockIcon } from '../components/icons'
+import { CalendarIcon, CheckCircleIcon, PlusIcon, ChevronRightIcon, PillIcon, ClockIcon } from '../components/icons'
 import { AlertSourceStatus } from '../components/AlertSourceStatus'
 import { Button, Card } from '../components/ui'
 import { canMemberSeeParentReplies, eventTextForMember, shortTime } from '../lib/careEvents'
@@ -60,125 +60,32 @@ function HelpedThisWeek({ patientId }: { patientId: string }) {
   </section>
 }
 
-type DoseStatus = 'done' | 'waiting' | 'missed' | 'upcoming'
-const DOSE_LABEL: Record<DoseStatus, string> = { done: 'Confirmed', waiting: 'Waiting for a reply', missed: 'Not taken', upcoming: 'Later today' }
-
-function minutesOf(time: string) {
-  const [h, m] = time.split(':').map(Number)
-  return (h || 0) * 60 + (m || 0)
-}
-
-function TodayGlance({ name, alerts, meds, tasks, nextAppt, events, time, onAlert, onView, onAppt }: {
-  name: string
+// One line in place of the four glance tiles: each part links to where it is handled.
+function TodaySummary({ alerts, meds, tasks, nextAppt, time, onView, onAppt }: {
   alerts: MedicationAlert[]
   meds: Medication[]
   tasks: CareTask[]
   nextAppt?: Appointment
-  events: { actorType: string; at: string }[]
   time: Date
-  onAlert: (id: string) => void
   onView: (view: View) => void
   onAppt: () => void
 }) {
-  const doses = meds.map(medicine => {
+  const waiting = meds.filter(medicine => {
     const alert = alerts.find(item => item.medicationId === medicine.id)
-    const status: DoseStatus = !alert ? 'upcoming' : alert.status === 'Confirmed' ? 'done' : alert.status === 'Missed' ? 'missed' : 'waiting'
-    return { id: medicine.id, alertId: alert?.id, name: medicine.name, time: medicine.scheduleTime, status, left: (minutesOf(medicine.scheduleTime) / 1440 * 100).toFixed(1) + '%' }
-  })
-  const waiting = doses.filter(dose => dose.status === 'waiting').length
-  const nowLeft = ((time.getHours() * 60 + time.getMinutes()) / 1440 * 100).toFixed(1) + '%'
-
-  const done = tasks.filter(task => task.status === 'Completed').length
-  const open = tasks.length - done
-  const donePct = tasks.length ? Math.round(done / tasks.length * 100) : 0
-
+    return alert && alert.status !== 'Confirmed' && alert.status !== 'Missed'
+  }).length
+  const open = tasks.filter(task => task.status !== 'Completed').length
   const days = nextAppt ? Math.max(0, Math.ceil((Date.parse(nextAppt.datetime) - time.getTime()) / 86400000)) : null
-  const ring = 2 * Math.PI * 26
-  const ringFill = days === null ? 0 : Math.max(0.06, 1 - Math.min(days, 14) / 14)
-
-  const stock = meds.map(medicine => {
-    const scale = Math.max(medicine.refillThreshold * 4, medicine.stock, 1)
-    return { id: medicine.id, name: medicine.name, stock: medicine.stock, low: medicine.stock <= medicine.refillThreshold, width: Math.round(medicine.stock / scale * 100) + '%', mark: Math.round(medicine.refillThreshold / scale * 100) + '%' }
-  })
-
-  const startOfToday = new Date(time)
-  startOfToday.setHours(0, 0, 0, 0)
-  const week = Array.from({ length: 7 }, (_, index) => {
-    const day = new Date(startOfToday)
-    day.setDate(day.getDate() - 6 + index)
-    const from = day.getTime()
-    const count = events.filter(event => event.actorType === 'member' && Date.parse(event.at) >= from && Date.parse(event.at) < from + 86400000).length
-    return { key: from, short: day.toLocaleDateString('en-IN', { weekday: 'short' }), long: day.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' }), count, today: index === 6 }
-  })
-  const most = Math.max(1, ...week.map(day => day.count))
-
-  return <section className="cc-glance" aria-label="Today at a glance">
-    <div className="cc-tile cc-tile-teal">
-      <div className="cc-tile-head"><span className="cc-tile-icon"><PillIcon className="w-5 h-5" /></span><span>Doses today</span></div>
-      <p className="cc-tile-big">{waiting}<span>{waiting === 1 ? 'reply waiting' : 'replies waiting'}</span></p>
-      <div className="cc-dose-track" aria-label="Today's medicine times">
-        <span className="cc-dose-now" style={{ left: nowLeft }} aria-hidden="true" />
-        {doses.map(dose => <button key={dose.id} type="button" className={'cc-dose cc-dose-' + dose.status} style={{ left: dose.left }} onClick={() => dose.alertId ? onAlert(dose.alertId) : onView('medicines')} aria-label={dose.name + ' at ' + dose.time + ': ' + DOSE_LABEL[dose.status]} title={dose.name + ' · ' + dose.time + ' · ' + DOSE_LABEL[dose.status]}>
-          {dose.status === 'done' ? <CheckCircleIcon className="w-4 h-4" /> : <ClockIcon className="w-4 h-4" />}
-        </button>)}
-      </div>
-      <div className="cc-dose-scale" aria-hidden="true"><span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span></div>
-      <button type="button" className="cc-tile-link" onClick={() => onView('medicines')}>Medicines <ChevronRightIcon className="w-4 h-4" /></button>
-    </div>
-
-    <div className="cc-tile cc-tile-amber">
-      <div className="cc-tile-head"><span className="cc-tile-icon"><CheckCircleIcon className="w-5 h-5" /></span><span>Care tasks</span></div>
-      <p className="cc-tile-big">{open}<span>{open === 1 ? 'task open' : 'tasks open'}</span></p>
-      <div className="cc-split" role="img" aria-label={done + ' done, ' + open + ' open'}>
-        <span className="cc-split-done" style={{ width: donePct + '%' }} />
-      </div>
-      <div className="cc-legend"><span><i className="cc-dot cc-dot-done" />{done} done</span><span><i className="cc-dot cc-dot-open" />{open} open</span></div>
-      <button type="button" className="cc-tile-link" onClick={() => onView('tasks')}>Tasks <ChevronRightIcon className="w-4 h-4" /></button>
-    </div>
-
-    <div className="cc-tile cc-tile-blue">
-      <div className="cc-tile-head"><span className="cc-tile-icon"><CalendarIcon className="w-5 h-5" /></span><span>Next visit</span></div>
-      <div className="cc-countdown">
-        <svg viewBox="0 0 64 64" className="cc-countdown-ring" aria-hidden="true">
-          <circle cx="32" cy="32" r="26" className="cc-countdown-track" />
-          <circle cx="32" cy="32" r="26" className="cc-countdown-fill" strokeDasharray={ring} strokeDashoffset={ring * (1 - ringFill)} />
-        </svg>
-        <span className="cc-countdown-num">{days === null ? '–' : days}</span>
-        <div className="cc-countdown-text">
-          <strong>{days === null ? 'No visit booked' : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : 'In ' + days + ' days'}</strong>
-          <span>{nextAppt ? nextAppt.type : 'Add one in Appointments'}</span>
-        </div>
-      </div>
-      <button type="button" className="cc-tile-link" onClick={() => nextAppt ? onAppt() : onView('appointments')}>{nextAppt ? 'Prepare' : 'Appointments'} <ChevronRightIcon className="w-4 h-4" /></button>
-    </div>
-
-    <div className="cc-tile cc-tile-violet">
-      <div className="cc-tile-head"><span className="cc-tile-icon"><PillIcon className="w-5 h-5" /></span><span>Medicine stock</span></div>
-      <div className="cc-stock-list">
-        {stock.length ? stock.map(item => <div key={item.id} className="cc-stock">
-          <div className="cc-stock-row"><span>{item.name}</span><strong className={item.low ? 'cc-stock-low' : ''}>{item.stock} left</strong></div>
-          <div className="cc-stock-bar" role="img" aria-label={item.name + ': ' + item.stock + ' left' + (item.low ? ', at or below refill level' : '')}>
-            <span className={'cc-stock-fill' + (item.low ? ' cc-stock-fill-low' : '')} style={{ width: item.width }} />
-            <i className="cc-stock-mark" style={{ left: item.mark }} />
-          </div>
-        </div>) : <p className="cc-tile-note">No active medicines</p>}
-      </div>
-      <p className="cc-tile-note">Line marks the refill level</p>
-      <button type="button" className="cc-tile-link" onClick={() => onView('medicines')}>Stock <ChevronRightIcon className="w-4 h-4" /></button>
-    </div>
-
-    <div className="cc-week">
-      <div className="cc-tile-head"><span className="cc-tile-icon"><UsersIcon className="w-5 h-5" /></span><span>Family activity, last 7 days</span></div>
-      <div className="cc-week-bars">
-        {week.map(day => <button key={day.key} type="button" className={'cc-week-day' + (day.today ? ' cc-week-today' : '')} onClick={() => onView('timeline')} aria-label={day.long + ': ' + day.count + (day.count === 1 ? ' action' : ' actions')} title={day.long + ' · ' + day.count + (day.count === 1 ? ' action' : ' actions')}>
-          <span className="cc-week-count">{day.count}</span>
-          <span className="cc-week-col"><span className="cc-week-fill" style={{ height: Math.max(6, Math.round(day.count / most * 100)) + '%' }} /></span>
-          <span className="cc-week-label">{day.short}</span>
-        </button>)}
-      </div>
-      <p className="cc-tile-note">Things the family recorded. It is not a measure of how {name} is.</p>
-    </div>
-  </section>
+  const low = meds.filter(medicine => medicine.stock <= medicine.refillThreshold)
+  const parts: { key: string; label: string; onClick: () => void }[] = [
+    { key: 'doses', label: waiting ? waiting + (waiting === 1 ? ' dose waiting for a reply' : ' doses waiting for a reply') : 'No doses waiting', onClick: () => onView('medicines') },
+    { key: 'tasks', label: open + (open === 1 ? ' task open' : ' tasks open'), onClick: () => onView('tasks') },
+    { key: 'visit', label: days === null ? 'No visit booked' : days === 0 ? 'Visit today' : days === 1 ? 'Visit tomorrow' : 'Visit in ' + days + ' days', onClick: () => nextAppt ? onAppt() : onView('appointments') },
+  ]
+  if (low.length) parts.push({ key: 'stock', label: low.length === 1 ? low[0].name + ' running low' : low.length + ' medicines running low', onClick: () => onView('medicines') })
+  return <nav className="cc-summary" aria-label="Today in brief"><ul>
+    {parts.map(part => <li key={part.key}><button type="button" className={part.key === 'stock' ? 'cc-summary-warn' : ''} onClick={part.onClick}>{part.label}<ChevronRightIcon className="w-4 h-4" aria-hidden="true" /></button></li>)}
+  </ul></nav>
 }
 
 export function Dashboard() {
@@ -198,6 +105,11 @@ export function Dashboard() {
   const memberFor = (id?: string) => state.members.find(member => (member.userId ?? member.id) === id)
   const activeMeds = medications.filter(medicine => medicine.status !== 'Stopped' && (!medicine.patientId || medicine.patientId === activePatientId)).sort((a, b) => a.scheduleTime.localeCompare(b.scheduleTime))
   const attention = [...openTasks.slice(0, 3).map(task => ({ kind: 'task' as const, task })), ...followups.slice(0, Math.max(0, 3 - openTasks.length)).map(alert => ({ kind: 'alert' as const, alert }))]
+  const unowned = openTasks.filter(task => !task.assigneeId).length + followups.filter(alert => !alert.assignedTo).length
+  const shownTaskIds = new Set(attention.flatMap(item => item.kind === 'task' ? [item.task.id] : []))
+  const shownMedIds = new Set(attention.flatMap(item => item.kind === 'alert' ? [item.alert.medicationId] : []))
+  const planMeds = activeMeds.filter(medicine => !shownMedIds.has(medicine.id))
+  const planTasks = tasks.filter(task => task.patientId === activePatientId && !shownTaskIds.has(task.id)).slice(0, 6)
   const openAppointment = () => { if (nextAppt) { actions.setView('appointments'); actions.openAppointmentDetail(nextAppt.id) } }
   const canWrite = state.activeCircleRole !== 'view-only'
   const greeting = time.getHours() < 12 ? 'Good morning' : time.getHours() < 17 ? 'Good afternoon' : 'Good evening'
@@ -238,50 +150,51 @@ export function Dashboard() {
       <div className="cc-patient-heading">
         <div className="cc-avatar cc-avatar-large">{patient?.initials || 'CC'}</div>
         <div className="cc-patient-title"><div><strong>{patient?.name || 'Choose a patient'}</strong>{patient && <span>Age {patient.age}</span>}</div><p>{state.circleName}</p></div>
-        {canWrite && <Button className="cc-add-task" onClick={() => actions.setView('tasks')}><PlusIcon className="w-5 h-5" />Add care task</Button>}
       </div>
     </header>
+    {patient?.parentChannel.reminders.status === 'Withdrawn' && <div className="cc-consent-note"><b>{patient.parentChannel.preferredName} asked to stop reminders.</b><p>Reminder messages are paused. A coordinator may send a new consent message.</p></div>}
+    <section className="cc-surface cc-attention" aria-labelledby="attention-heading">
+      <div className="cc-section-heading">
+        <div><h2 id="attention-heading">Needs attention now</h2><p className="cc-attention-sum">{count === 0 ? 'Nothing open' : count + ' open' + (unowned ? ' · ' + unowned + ' without an owner' : '')}</p></div>
+        {canWrite && <Button variant="secondary" className="cc-attention-add" onClick={() => actions.setView('tasks')}><PlusIcon className="w-4 h-4" />Add care task</Button>}
+      </div>
+      {state.commitError ? <div className="cc-empty"><ClockIcon className="w-7 h-7" /><strong>Some changes are not saved</strong><p>Use Retry in the persistent banner before relying on the latest update.</p></div> : !hasCarePlan ? <div className="cc-empty"><PillIcon className="w-7 h-7" /><strong>Start the care plan</strong><p>Add a medicine or one care task to begin.</p></div> : attention.length === 0 ? <div className="cc-empty"><CheckCircleIcon className="w-7 h-7" /><strong>You're all caught up</strong><p>{tomorrowFirstDose ? `Tomorrow’s first dose is ${tomorrowFirstDose.name} at ${fmt12h(tomorrowFirstDose.scheduleTime)}.` : 'There is no dose scheduled for tomorrow yet.'}</p></div> : attention.map(item => {
+        const isTask = item.kind === 'task'
+        const id = isTask ? item.task.id : item.alert.id
+        const owner = memberFor(isTask ? item.task.assigneeId : item.alert.assignedTo)
+        const title = isTask ? item.task.title : item.alert.medicationName
+        return <div className="cc-attention-row" key={item.kind + id}>
+          <div className={'cc-icon-tile ' + (isTask ? 'cc-icon-amber' : '')}>{isTask ? <CheckCircleIcon className="w-5 h-5" /> : <PillIcon className="w-5 h-5" />}</div>
+          <div className="cc-attention-title"><h3>{title}</h3>{isTask && item.task.description && <p>{item.task.description}</p>}<span className="cc-due"><CalendarIcon className="w-4 h-4" />{isTask ? dueLabel(item.task.due) : 'Today · ' + fmt12h(item.alert.scheduledTime)}</span></div>
+          <div className="cc-owner"><span className="cc-label">Owner</span><div>{owner && <span className="cc-avatar cc-avatar-small">{owner.initials}</span>}<span>{owner?.name || 'Unassigned'}</span></div></div>
+          <div className="cc-row-status"><span className="cc-label">Status</span>{isTask ? <TaskStatus task={item.task} /> : <AlertSourceStatus alert={item.alert} />}</div>
+          <Button variant="secondary" className="cc-view-task" onClick={() => isTask ? actions.setView('tasks') : actions.openAlertDetail(id)}>{isTask && !owner && canWrite ? 'Assign' : 'View task'}</Button>
+        </div>
+      })}
+      {count > attention.length && <button className="cc-text-link cc-more" onClick={() => actions.setView(openTasks.length > 3 ? 'tasks' : 'medicines')}>Review more care items <ChevronRightIcon className="w-4 h-4" /></button>}
+    </section>
+    <TodaySummary alerts={todayAlerts} meds={activeMeds} tasks={patientTasks} nextAppt={nextAppt} time={time} onView={view => actions.setView(view)} onAppt={openAppointment} />
+    <DayStrip />
+    {firstReply?.rawText && patient && canMemberSeeParentReplies(patient, state.currentUser?.id) && !state.dismissedFirstReplyPatientIds.includes(patient.id) && <Card className="cc-first-reply"><div><strong>{patient.parentChannel.preferredName} replied for the first time</strong><p>“{firstReply.rawText}” · {replyAlert?.medicationName ?? 'Medicine reminder'} · {shortTime(firstReply.at)}</p></div><Button variant="ghost" onClick={() => actions.dismissFirstReply(patient.id)}>Dismiss</Button></Card>}
     {nudge && <Card className="p-5 mb-4"><div className="flex items-start justify-between gap-4"><div><strong className="text-slate-800">{nudge.title}</strong><p className="text-sm text-slate-500 mt-1">{nudge.detail}</p></div><Button variant="ghost" onClick={() => dismiss(`nudge:${nudge.id}`)}>{nudge.secondaryLabel}</Button></div>{nudge.primaryLabel && <Button variant="secondary" className="mt-4" onClick={() => { if (nudge.action === 'resend-consent' && patient) actions.sendParentConsent(patient.id); else if (nudge.view) actions.setView(nudge.view) }}>{nudge.primaryLabel}</Button>}</Card>}
     {!setupHidden && <Card className="p-5 mb-4"><div className="flex items-start justify-between gap-4"><div><strong className="text-slate-800">{setup.complete ? 'Milestones' : `Setting up - ${setup.completed} of 4`}</strong><p className="text-sm text-slate-500 mt-1">{setup.complete ? 'What your circle has in place so far.' : 'A short path to a useful care circle.'}</p></div><Button variant="ghost" onClick={() => dismiss('setup-checklist')}>Hide for 14 days</Button></div><div className="grid sm:grid-cols-2 gap-2 mt-4">{setup.complete ? setup.milestones.map(item => <div key={item.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><span className="font-semibold">{item.complete ? 'Done' : 'Ahead'}</span> · {item.title}</div>) : setup.steps.map(item => <Button variant="secondary" key={item.id} onClick={() => actions.setView(item.view)} className="justify-start text-left"><span className="font-semibold">{item.complete ? 'Done' : 'Next'}</span> · {item.title}</Button>)}</div></Card>}
-    <DayStrip />
     {nextStep && <Card className="p-5 my-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Next step</p><div className="flex items-start justify-between gap-4 mt-2"><div><strong className="text-slate-800">{nextStep.title}</strong><p className="text-sm text-slate-500 mt-1">{nextStep.detail}</p></div><div className="flex gap-2"><Button variant="ghost" onClick={() => dismiss(`next-step:${nextStep.id}`)}>Not now</Button><Button onClick={() => actions.setView(nextStep.view)}>Open</Button></div></div></Card>}
-    {patient?.parentChannel.reminders.status === 'Withdrawn' && <div className="cc-consent-note"><b>{patient.parentChannel.preferredName} asked to stop reminders.</b><p>Reminder messages are paused. A coordinator may send a new consent message.</p></div>}
-    {firstReply?.rawText && patient && canMemberSeeParentReplies(patient, state.currentUser?.id) && !state.dismissedFirstReplyPatientIds.includes(patient.id) && <Card className="cc-first-reply"><div><strong>{patient.parentChannel.preferredName} replied for the first time</strong><p>“{firstReply.rawText}” · {replyAlert?.medicationName ?? 'Medicine reminder'} · {shortTime(firstReply.at)}</p></div><Button variant="ghost" onClick={() => actions.dismissFirstReply(patient.id)}>Dismiss</Button></Card>}
-    <TodayGlance name={patient?.parentChannel.preferredName ?? 'your parent'} alerts={todayAlerts} meds={activeMeds} tasks={tasks.filter(task => task.patientId === activePatientId)} nextAppt={nextAppt} events={events} time={time} onAlert={id => actions.openAlertDetail(id)} onView={view => actions.setView(view)} onAppt={openAppointment} />
     <div className="cc-dashboard-grid">
       <div className="cc-main-column">
-        <section className="cc-surface" aria-labelledby="attention-heading">
-          <div className="cc-section-heading"><h2 id="attention-heading">Needs attention now</h2><span className="cc-count">{count} {count === 1 ? 'item' : 'items'}</span></div>
-          {state.commitError ? <div className="cc-empty"><ClockIcon className="w-7 h-7" /><strong>Some changes are not saved</strong><p>Use Retry in the persistent banner before relying on the latest update.</p></div> : !hasCarePlan ? <div className="cc-empty"><PillIcon className="w-7 h-7" /><strong>Start the care plan</strong><p>Add a medicine or one care task to begin.</p></div> : attention.length === 0 ? <div className="cc-empty"><CheckCircleIcon className="w-7 h-7" /><strong>You're all caught up</strong><p>{tomorrowFirstDose ? `Tomorrow’s first dose is ${tomorrowFirstDose.name} at ${fmt12h(tomorrowFirstDose.scheduleTime)}.` : 'There is no dose scheduled for tomorrow yet.'}</p></div> : attention.map(item => {
-            const isTask = item.kind === 'task'
-            const id = isTask ? item.task.id : item.alert.id
-            const owner = memberFor(isTask ? item.task.assigneeId : item.alert.assignedTo)
-            const title = isTask ? item.task.title : item.alert.medicationName
-            return <div className="cc-attention-row" key={item.kind + id}>
-              <div className={'cc-icon-tile ' + (isTask ? 'cc-icon-amber' : '')}>{isTask ? <CheckCircleIcon className="w-5 h-5" /> : <PillIcon className="w-5 h-5" />}</div>
-              <div className="cc-attention-title"><h3>{title}</h3>{isTask && item.task.description && <p>{item.task.description}</p>}<span className="cc-due"><CalendarIcon className="w-4 h-4" />{isTask ? dueLabel(item.task.due) : 'Today · ' + fmt12h(item.alert.scheduledTime)}</span></div>
-              <div className="cc-owner"><span className="cc-label">Owner</span><div>{owner && <span className="cc-avatar cc-avatar-small">{owner.initials}</span>}<span>{owner?.name || 'Unassigned'}</span></div></div>
-              <div className="cc-row-status"><span className="cc-label">Status</span>{isTask ? <TaskStatus task={item.task} /> : <AlertSourceStatus alert={item.alert} />}</div>
-              <Button variant="secondary" className="cc-view-task" onClick={() => isTask ? actions.setView('tasks') : actions.openAlertDetail(id)}>{isTask && !owner && canWrite ? 'Assign' : 'View task'}</Button>
-            </div>
-          })}
-          {count > attention.length && <button className="cc-text-link cc-more" onClick={() => actions.setView(openTasks.length > 3 ? 'tasks' : 'medicines')}>Review more care items <ChevronRightIcon className="w-4 h-4" /></button>}
-        </section>
-        <section className="cc-surface cc-plan" aria-labelledby="responsibility-heading">
+        {(planMeds.length > 0 || planTasks.length > 0) && <section className="cc-surface cc-plan" aria-labelledby="responsibility-heading">
           <div className="cc-section-heading"><h2 id="responsibility-heading">Who is doing what</h2></div>
           <div className="cc-table-scroll"><table className="cc-care-table"><thead><tr><th>Activity</th><th>Responsible</th><th>Due</th><th>Status</th><th><span className="sr-only">Action</span></th></tr></thead><tbody>
-            {activeMeds.map(medicine => {
+            {planMeds.map(medicine => {
               const alert = todayAlerts.find(item => item.medicationId === medicine.id)
               const owner = memberFor(alert?.confirmedBy || alert?.assignedTo || patient?.primaryCaregiverId)
               return <tr key={'medicine-' + medicine.id}><td><div className="cc-activity"><span className="cc-icon-tile"><PillIcon className="w-5 h-5" /></span><div><strong>{medicine.name}</strong><span>Medicine schedule</span></div></div></td><td><div className="cc-table-owner">{owner && <span className="cc-avatar cc-avatar-small">{owner.initials}</span>}{owner?.name || 'Unassigned'}</div></td><td>{fmt12h(medicine.scheduleTime)}<span className="cc-secondary-line">Today</span></td><td>{alert ? <AlertSourceStatus alert={alert} /> : <span className="cc-status cc-status-neutral">No reminder sent</span>}</td><td><button className="cc-row-action" aria-label={'View ' + medicine.name} onClick={() => alert ? actions.openAlertDetail(alert.id) : actions.setView('medicines')}><ChevronRightIcon className="w-4 h-4" /></button></td></tr>
             })}
-            {tasks.filter(task => task.patientId === activePatientId).slice(0, 6).map(task => {
+            {planTasks.map(task => {
               const owner = memberFor(task.assigneeId)
               return <tr key={'task-' + task.id}><td><div className="cc-activity"><span className="cc-icon-tile"><CheckCircleIcon className="w-5 h-5" /></span><div><strong>{task.title}</strong><span>Care task</span></div></div></td><td><div className="cc-table-owner">{owner && <span className="cc-avatar cc-avatar-small">{owner.initials}</span>}{owner?.name || 'Unassigned'}</div></td><td>{dueLabel(task.due)}</td><td><TaskStatus task={task} /></td><td><button className="cc-row-action" aria-label={'View ' + task.title} onClick={() => actions.setView('tasks')}><ChevronRightIcon className="w-4 h-4" /></button></td></tr>
             })}
           </tbody></table></div>
-          {!activeMeds.length && !tasks.some(task => task.patientId === activePatientId) && <div className="cc-empty"><UsersIcon className="w-7 h-7" /><strong>Build your shared care plan</strong><p>Add a care task or medicine schedule to see responsibilities here.</p><div className="cc-empty-actions"><Button variant="secondary" onClick={() => actions.setView('tasks')}>Care tasks</Button><Button variant="ghost" onClick={() => actions.setView('medicines')}>Medicines</Button></div></div>}
-        </section>
+        </section>}
       </div>
       <aside className="cc-side-column cc-surface">
         <section aria-labelledby="next-appointment-heading"><h2 id="next-appointment-heading">Next appointment</h2>{nextAppt ? <><div className="cc-appointment"><span className="cc-icon-tile"><CalendarIcon className="w-6 h-6" /></span><div><h3>{nextAppt.type}</h3><p>{nextAppt.location || nextAppt.doctor}</p></div></div><p className="cc-appointment-date">{new Date(nextAppt.datetime).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · {new Date(nextAppt.datetime).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })}</p><Button className="cc-prepare" onClick={openAppointment}><CalendarIcon className="w-5 h-5" />Prepare for visit</Button></> : <div className="cc-side-empty"><p>No upcoming appointment.</p><Button variant="secondary" onClick={() => actions.setView('appointments')}>View appointments</Button></div>}</section>
