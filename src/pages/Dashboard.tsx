@@ -2,9 +2,9 @@ import { useApp } from '../context'
 import { CalendarIcon, CheckCircleIcon, PlusIcon, ChevronRightIcon, PillIcon, UsersIcon, ClockIcon } from '../components/icons'
 import { AlertSourceStatus } from '../components/AlertSourceStatus'
 import { Button, Card } from '../components/ui'
-import { awardCarePoints, canMemberSeeParentReplies, eventTextForMember, shortTime } from '../lib/careEvents'
-import { useEffect, useState } from 'react'
-import type { AppState, CareEvent, CareTask, Appointment, Medication, MedicationAlert, View } from '../types'
+import { canMemberSeeParentReplies, eventTextForMember, shortTime } from '../lib/careEvents'
+import { useState } from 'react'
+import type { CareEvent, CareTask, Appointment, Medication, MedicationAlert, View } from '../types'
 import { deriveStage, isNewInvitee } from '../lib/stage'
 import { setupProgress } from '../lib/setupProgress'
 import { currentNextStep } from '../lib/nextStep'
@@ -39,146 +39,24 @@ function NewInviteeWelcome() {
   return <div className="max-w-2xl mx-auto space-y-5"><Card className="p-7"><p className="text-xs font-semibold uppercase tracking-wider text-[#477E78]">Welcome to the circle</p><h1 className="text-3xl font-semibold text-slate-800 mt-2">{inviter?.name ?? 'The coordinator'} invited you</h1><p className="text-sm text-slate-500 mt-3">Start with one care task. You can explore the rest of the circle after responding.</p></Card>{task ? <Card className="p-6"><p className="text-xs font-semibold text-slate-400">One task to start</p><h2 className="text-lg font-semibold text-slate-800 mt-2">{task.title}</h2><p className="text-sm text-slate-500 mt-2">{task.description}</p><p className="text-xs text-slate-400 mt-3">Due {dueLabel(task.due)}</p><div className="flex gap-2 mt-5">{canRespond ? <><Button onClick={() => actions.respondToTask(task.id, 'Accepted')}>Accept</Button><Button variant="secondary" onClick={() => actions.respondToTask(task.id, 'Declined', 'Not available')}>Decline</Button></> : <p className="text-sm text-slate-500">This task is already in progress.</p>}</div></Card> : <Card className="p-6"><p className="text-sm text-slate-500">There is no open task assigned to you yet.</p></Card>}</div>
 }
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
-const GARDEN_STAGES = ['Seed', 'Sprout', 'Sapling', 'Blossom', 'Grove']
-const CONFETTI = ['#e8a33d', '#d86a77', '#4f9d78', '#5b8fd1', '#9a73c9']
+const CLOSING_KINDS: CareEvent['kind'][] = ['family_confirmed', 'task_completed', 'refill_done']
 
-function gardenStats(state: AppState, patientId: string, time: Date) {
-  const awards = awardCarePoints(state.careEvents.filter(event => event.patientId === patientId))
-  const events = awards.filter(award => award.points > 0).map(award => award.event)
-  const points = awards.reduce((sum, award) => sum + award.points, 0)
-  const level = Math.floor(Math.sqrt(points / 20)) + 1
-  const floor = 20 * (level - 1) ** 2
-  const ceiling = 20 * level ** 2
-  const progress = Math.min(1, Math.max(0, (points - floor) / (ceiling - floor)))
-  const week = events.filter(event => Date.parse(event.at) > time.getTime() - WEEK_MS)
-  const inWeek = (kind: CareEvent['kind']) => week.filter(event => event.kind === kind).length
-  const activeMembers = state.members.filter(member => member.status === 'Active').length
-  const forPatient = state.appointments.filter(item => !item.patientId || item.patientId === patientId)
-  const nextAppt = forPatient
-    .filter(item => ['Upcoming', 'Confirmed'].includes(item.status) && Date.parse(item.datetime) >= time.getTime())
-    .sort((a, b) => Date.parse(a.datetime) - Date.parse(b.datetime))[0]
-  const meds = state.medications.filter(item => item.status !== 'Stopped' && (!item.patientId || item.patientId === patientId))
-  const quests = [
-    { id: 'tasks', title: 'Finish two care tasks', hint: 'Complete tasks from the circle list', done: inWeek('task_completed'), goal: 2 },
-    activeMembers >= 2
-      ? { id: 'team', title: 'Share the load', hint: 'Two different members take action', done: new Set(week.map(event => event.actorId)).size, goal: 2 }
-      : { id: 'invite', title: 'Invite a second member', hint: 'Care is lighter when two people share it', done: 0, goal: 1 },
-    nextAppt
-      ? { id: 'visit', title: 'Prepare the next visit', hint: nextAppt.type + ': mark preparation complete', done: nextAppt.preparationComplete ? 1 : 0, goal: 1 }
-      : { id: 'stock', title: 'Keep medicines stocked', hint: 'Every medicine above its refill level', done: meds.length > 0 && meds.every(item => item.stock > item.refillThreshold) ? 1 : 0, goal: 1 },
-  ]
-  const count = (kind: CareEvent['kind']) => events.filter(event => event.kind === kind).length
-  const badges = [
-    { id: 'first', name: 'First dose confirmed', hint: 'Confirm a dose yourself', earned: count('family_confirmed') > 0 },
-    { id: 'call', name: 'Reached out', hint: 'Claim a follow-up call', earned: count('claimed') > 0 },
-    { id: 'refill', name: 'Refill hero', hint: 'Restock a medicine', earned: count('refill_done') > 0 },
-    { id: 'team', name: 'Team player', hint: 'Two members act in the circle', earned: new Set(events.map(event => event.actorId)).size >= 2 },
-    { id: 'visit', name: 'Visit ready', hint: 'Complete a visit preparation', earned: forPatient.some(item => item.preparationComplete) },
-    { id: 'digest', name: 'Week one', hint: 'Receive the first weekly digest', earned: state.careEvents.some(event => event.patientId === patientId && event.kind === 'weekly_digest') },
-  ]
-  return { points, level, floor, ceiling, progress, quests, badges }
-}
-
-function GardenPlant({ stage }: { stage: number }) {
-  const height = 18 + stage * 15
-  const top = 100 - height
-  const leaves = Array.from({ length: Math.min(stage + 1, 6) }, (_, index) => index)
-  const petals = [0, 72, 144, 216, 288]
-  return <svg className="cc-plant" viewBox="0 0 120 120" role="img" aria-label={'Garden growth stage ' + stage + ' of 5'}>
-    <ellipse cx="60" cy="112" rx="42" ry="7" fill="#cfe5d8" />
-    <path d="M42 98 h36 l-4 15 h-28 z" fill="#c9814e" />
-    <rect x="40" y="95" width="40" height="6" rx="3" fill="#b06c3d" />
-    <g className="cc-sway">
-      <path d={'M60 98 C58 ' + (98 - height * 0.5) + ' 62 ' + (98 - height * 0.8) + ' 60 ' + top} stroke="#3f8a62" strokeWidth="4" strokeLinecap="round" fill="none" />
-      {leaves.map(index => {
-        const y = 92 - index * (height / 7 + 2)
-        const side = index % 2 ? 1 : -1
-        const x = 60 + side * 11
-        return <ellipse key={index} cx={x} cy={y} rx="11" ry="5.5" fill={index % 2 ? '#5db17f' : '#46996b'} transform={'rotate(' + side * -25 + ' ' + x + ' ' + y + ')'} />
-      })}
-      {stage >= 3 && <g>
-        {petals.map(angle => <circle key={angle} cx={60 + 7.5 * Math.cos(angle * Math.PI / 180)} cy={top - 2 + 7.5 * Math.sin(angle * Math.PI / 180)} r="5.5" fill="#f4a9bc" />)}
-        <circle cx="60" cy={top - 2} r="4.5" fill="#f6c453" />
-      </g>}
-      {stage >= 5 && <g>
-        {petals.map(angle => <circle key={angle} cx={78 + 5.5 * Math.cos(angle * Math.PI / 180)} cy={top + 16 + 5.5 * Math.sin(angle * Math.PI / 180)} r="4" fill="#b99be3" />)}
-        <circle cx="78" cy={top + 16} r="3.2" fill="#f6c453" />
-      </g>}
-    </g>
-  </svg>
-}
-
-function CircleGarden({ patientId, name }: { patientId: string; name: string }) {
+// Who closed care items this week. Listed by name, never ranked or scored.
+function HelpedThisWeek({ patientId }: { patientId: string }) {
   const { state, now } = useApp()
-  const stats = gardenStats(state, patientId, now())
-  const stage = Math.min(stats.level, 5)
-  const circumference = 2 * Math.PI * 30
-  const storageKey = 'cc-garden-level-' + state.activeCircleId + '-' + patientId
-  const [celebrate, setCelebrate] = useState(false)
-  useEffect(() => {
-    if (state.isSample) return
-    try {
-      const stored = Number(localStorage.getItem(storageKey))
-      if (stored && stats.level > stored) setCelebrate(true)
-      localStorage.setItem(storageKey, String(stats.level))
-    } catch { /* storage unavailable */ }
-  }, [state.isSample, storageKey, stats.level])
-  const bloomed = stats.quests.filter(quest => quest.done >= quest.goal).length
-  return <section className="cc-garden cc-garden-compact" aria-labelledby="garden-heading">
-    <div className="cc-garden-hero">
-      <div className="cc-garden-art" aria-hidden={false}>
-        <GardenPlant stage={stage} />
-        <span className="cc-sparkle cc-sparkle-a" aria-hidden="true" />
-        <span className="cc-sparkle cc-sparkle-b" aria-hidden="true" />
-      </div>
-      <div className="cc-garden-copy">
-        <p className="cc-eyebrow">Circle garden · {GARDEN_STAGES[stage - 1]}</p>
-        <div className="cc-level-row">
-          <svg className="cc-ring" viewBox="0 0 72 72" aria-hidden="true">
-            <circle cx="36" cy="36" r="30" className="cc-ring-track" />
-            <circle cx="36" cy="36" r="30" className="cc-ring-fill" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - stats.progress)} />
-          </svg>
-          <span className="cc-ring-level">{stats.level}</span>
-          <div>
-            <h2 id="garden-heading">Level {stats.level}</h2>
-            <p className="cc-garden-lead">{stats.points - stats.floor} of {stats.ceiling - stats.floor} care points to level {stats.level + 1}</p>
-          </div>
-        </div>
-        <div className="cc-xpbar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(stats.progress * 100)} aria-label="Progress to the next level"><span style={{ width: Math.round(stats.progress * 100) + '%' }} /></div>
-        <p className="cc-garden-note">Points come from what your family does: calling to confirm a dose, finishing accepted tasks and closing refills. Each action counts once, with a daily limit. They never rate how {name} is.</p>
-      </div>
-    </div>
-    <div className="cc-garden-panels">
-      <div>
-        <div className="cc-section-heading"><h3 className="cc-panel-title">This week's quests</h3><span className="cc-count">{bloomed} of {stats.quests.length} bloomed</span></div>
-        <div className="cc-quests">
-          {stats.quests.map(quest => {
-            const done = quest.done >= quest.goal
-            const shown = Math.min(quest.done, quest.goal)
-            return <div key={quest.id} className={'cc-quest' + (done ? ' cc-quest-done' : '')}>
-              <div className="cc-quest-head"><strong>{quest.title}</strong><span>{done ? 'Bloomed' : shown + ' of ' + quest.goal}</span></div>
-              <p>{quest.hint}</p>
-              <div className="cc-quest-bar" aria-hidden="true"><span style={{ width: Math.round(shown / quest.goal * 100) + '%' }} /></div>
-            </div>
-          })}
-        </div>
-      </div>
-      <div>
-        <div className="cc-section-heading"><h3 className="cc-panel-title">Badges</h3><span className="cc-count">{stats.badges.filter(badge => badge.earned).length} of {stats.badges.length}</span></div>
-        <ul className="cc-badges">
-          {stats.badges.map(badge => <li key={badge.id} className={'cc-badge' + (badge.earned ? ' cc-badge-earned' : '')}>
-            <span className="cc-badge-medal" aria-hidden="true">{badge.earned ? '★' : '☆'}</span>
-            <span><strong>{badge.name}</strong><em>{badge.earned ? 'Earned' : badge.hint}</em></span>
-          </li>)}
-        </ul>
-      </div>
-    </div>
-    {celebrate && <div className="cc-levelup" role="status">
-      <div className="cc-confetti" aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <i key={index} style={{ left: (index * 5.7 + 3) + '%', background: CONFETTI[index % CONFETTI.length], animationDelay: (index % 6) * 0.12 + 's' }} />)}</div>
-      <strong>Level {stats.level} reached</strong>
-      <p>Your circle's care helped the garden grow.</p>
-      <button type="button" onClick={() => setCelebrate(false)}>Keep going</button>
-    </div>}
+  const since = now().getTime() - WEEK_MS
+  const counts = new Map<string, number>()
+  for (const event of state.careEvents) {
+    if (event.patientId !== patientId || event.actorType !== 'member' || !CLOSING_KINDS.includes(event.kind) || Date.parse(event.at) < since) continue
+    counts.set(event.actorId, (counts.get(event.actorId) ?? 0) + 1)
+  }
+  const rows = [...counts].map(([id, closed]) => ({ id, closed, member: state.members.find(member => (member.userId ?? member.id) === id) }))
+    .filter(row => row.member)
+    .sort((a, b) => a.member!.name.localeCompare(b.member!.name))
+  return <section className="cc-helped" aria-labelledby="helped-heading">
+    <h2 id="helped-heading">Who closed items this week</h2>
+    {rows.length ? <ul>{rows.map(row => <li key={row.id}><span className="cc-avatar cc-avatar-small">{row.member!.initials}</span><span>{row.member!.name}</span><span className="cc-helped-count">{row.closed} {row.closed === 1 ? 'item' : 'items'}</span></li>)}</ul>
+      : <p className="cc-side-empty">When someone confirms a dose, finishes a task or restocks a medicine, it shows here.</p>}
   </section>
 }
 
@@ -364,7 +242,7 @@ export function Dashboard() {
       </div>
     </header>
     {nudge && <Card className="p-5 mb-4"><div className="flex items-start justify-between gap-4"><div><strong className="text-slate-800">{nudge.title}</strong><p className="text-sm text-slate-500 mt-1">{nudge.detail}</p></div><Button variant="ghost" onClick={() => dismiss(`nudge:${nudge.id}`)}>{nudge.secondaryLabel}</Button></div>{nudge.primaryLabel && <Button variant="secondary" className="mt-4" onClick={() => { if (nudge.action === 'resend-consent' && patient) actions.sendParentConsent(patient.id); else if (nudge.view) actions.setView(nudge.view) }}>{nudge.primaryLabel}</Button>}</Card>}
-    {!setupHidden && <Card className="p-5 mb-4"><div className="flex items-start justify-between gap-4"><div><strong className="text-slate-800">{setup.complete ? 'Milestones' : `Setting up - ${setup.completed} of 4`}</strong><p className="text-sm text-slate-500 mt-1">{setup.complete ? 'Progress from the care record, not a score.' : 'A short path to a useful care circle.'}</p></div><Button variant="ghost" onClick={() => dismiss('setup-checklist')}>Hide for 14 days</Button></div><div className="grid sm:grid-cols-2 gap-2 mt-4">{setup.complete ? setup.milestones.map(item => <div key={item.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><span className="font-semibold">{item.complete ? 'Done' : 'Ahead'}</span> · {item.title}</div>) : setup.steps.map(item => <Button variant="secondary" key={item.id} onClick={() => actions.setView(item.view)} className="justify-start text-left"><span className="font-semibold">{item.complete ? 'Done' : 'Next'}</span> · {item.title}</Button>)}</div></Card>}
+    {!setupHidden && <Card className="p-5 mb-4"><div className="flex items-start justify-between gap-4"><div><strong className="text-slate-800">{setup.complete ? 'Milestones' : `Setting up - ${setup.completed} of 4`}</strong><p className="text-sm text-slate-500 mt-1">{setup.complete ? 'What your circle has in place so far.' : 'A short path to a useful care circle.'}</p></div><Button variant="ghost" onClick={() => dismiss('setup-checklist')}>Hide for 14 days</Button></div><div className="grid sm:grid-cols-2 gap-2 mt-4">{setup.complete ? setup.milestones.map(item => <div key={item.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><span className="font-semibold">{item.complete ? 'Done' : 'Ahead'}</span> · {item.title}</div>) : setup.steps.map(item => <Button variant="secondary" key={item.id} onClick={() => actions.setView(item.view)} className="justify-start text-left"><span className="font-semibold">{item.complete ? 'Done' : 'Next'}</span> · {item.title}</Button>)}</div></Card>}
     <DayStrip />
     {nextStep && <Card className="p-5 my-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Next step</p><div className="flex items-start justify-between gap-4 mt-2"><div><strong className="text-slate-800">{nextStep.title}</strong><p className="text-sm text-slate-500 mt-1">{nextStep.detail}</p></div><div className="flex gap-2"><Button variant="ghost" onClick={() => dismiss(`next-step:${nextStep.id}`)}>Not now</Button><Button onClick={() => actions.setView(nextStep.view)}>Open</Button></div></div></Card>}
     {patient?.parentChannel.reminders.status === 'Withdrawn' && <div className="cc-consent-note"><b>{patient.parentChannel.preferredName} asked to stop reminders.</b><p>Reminder messages are paused. A coordinator may send a new consent message.</p></div>}
@@ -407,7 +285,7 @@ export function Dashboard() {
       </div>
       <aside className="cc-side-column cc-surface">
         <section aria-labelledby="next-appointment-heading"><h2 id="next-appointment-heading">Next appointment</h2>{nextAppt ? <><div className="cc-appointment"><span className="cc-icon-tile"><CalendarIcon className="w-6 h-6" /></span><div><h3>{nextAppt.type}</h3><p>{nextAppt.location || nextAppt.doctor}</p></div></div><p className="cc-appointment-date">{new Date(nextAppt.datetime).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · {new Date(nextAppt.datetime).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })}</p><Button className="cc-prepare" onClick={openAppointment}><CalendarIcon className="w-5 h-5" />Prepare for visit</Button></> : <div className="cc-side-empty"><p>No upcoming appointment.</p><Button variant="secondary" onClick={() => actions.setView('appointments')}>View appointments</Button></div>}</section>
-        {patient && stage >= 4 && <CircleGarden patientId={activePatientId} name={patient.parentChannel.preferredName} />}
+        {patient && stage >= 4 && <HelpedThisWeek patientId={activePatientId} />}
         <section className="cc-latest" aria-labelledby="latest-update-heading"><h2 id="latest-update-heading">Latest update</h2>{events[0] ? <><div className="cc-update-note">{eventTextForMember(events[0], patient, state.currentUser?.id)}</div><p className="cc-event-meta"><ClockIcon className="w-4 h-4" />{memberFor(events[0].actorId)?.name || (events[0].actorType === 'parent' ? patient?.parentChannel.preferredName : 'CareCircle')} · {new Date(events[0].at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</p><button className="cc-text-link" onClick={() => actions.setView('timeline')}>View care timeline <ChevronRightIcon className="w-4 h-4" /></button></> : <p className="cc-side-empty">Care updates will appear here as your circle records activity.</p>}</section>
       </aside>
     </div>
