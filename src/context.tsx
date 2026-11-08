@@ -2088,7 +2088,8 @@ export function AppProvider({ children, now: baseNow = systemNow, sample = false
       const current = stateRef.current
       const medications = current.medications.map(item => item.id === id ? { ...item, stock: item.stock + amount } : item)
       const medicineName = current.medications.find(item => item.id === id)?.name
-      const refillTasks = current.tasks.filter(task => task.patientId === current.activePatientId && task.status !== 'Completed' && (task.medicationId === id || task.title === `Refill ${medicineName}`))
+      const refillTaskIds = new Set(current.careEvents.filter(event => event.kind === 'refill_needed' && event.patientId === current.activePatientId && event.medicationId === id && event.taskId).map(event => event.taskId))
+      const refillTasks = current.tasks.filter(task => task.patientId === current.activePatientId && task.status !== 'Completed' && (refillTaskIds.has(task.id) || task.title === `Refill ${medicineName}`))
       const tasks = current.tasks.map(task => refillTasks.some(item => item.id === task.id) ? { ...task, status: 'Completed' as const, response: 'Accepted' as const } : task)
       const event: CareEvent = {
         id: crypto.randomUUID(), at: now().toISOString(), kind: 'refill_done', patientId: current.activePatientId,
