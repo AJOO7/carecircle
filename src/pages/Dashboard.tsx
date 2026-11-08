@@ -1,3 +1,5 @@
+import '../dashboard-refresh.css'
+import { focusTask } from '../lib/taskNavigation'
 import { useApp } from '../context'
 import { CalendarIcon, CheckCircleIcon, PlusIcon, ChevronRightIcon, PillIcon, ClockIcon } from '../components/icons'
 import { AlertSourceStatus } from '../components/AlertSourceStatus'
@@ -17,7 +19,7 @@ function dueLabel(value: string) {
   return Number.isNaN(date.getTime()) ? value || 'No due date' : dayAndClock(date)
 }
 function TaskStatus({ task }: { task: CareTask }) {
-  const label = task.status === 'Completed' ? 'Done' : task.response === 'Declined' ? 'Declined' : task.status === 'In progress' ? 'In progress' : task.response === 'Accepted' ? 'Accepted' : task.assigneeId ? 'Awaiting update' : 'Not started'
+  const label = task.status === 'Completed' ? 'Done' : task.response === 'Declined' ? 'Declined' : task.status === 'In progress' ? 'In progress' : task.response === 'Accepted' ? 'Accepted' : task.assigneeId ? 'Awaiting response' : 'Needs an owner'
   return <span className={'cc-status ' + (task.status === 'Completed' ? 'cc-status-done' : task.response === 'Declined' ? 'cc-status-warning' : task.assigneeId ? 'cc-status-pending' : 'cc-status-neutral')}>{label}</span>
 }
 
@@ -71,7 +73,7 @@ function TodaySummary({ alerts, meds, tasks, nextAppt, time, onView, onAppt }: {
     return alert && alert.status !== 'Confirmed' && alert.status !== 'Missed'
   }).length
   const open = tasks.filter(task => task.status !== 'Completed').length
-  const days = nextAppt ? Math.max(0, Math.ceil((Date.parse(nextAppt.datetime) - time.getTime()) / 86400000)) : null
+  const days = nextAppt ? Math.round((Date.UTC(new Date(nextAppt.datetime).getFullYear(), new Date(nextAppt.datetime).getMonth(), new Date(nextAppt.datetime).getDate()) - Date.UTC(time.getFullYear(), time.getMonth(), time.getDate())) / 86400000) : null
   const low = meds.filter(medicine => medicine.stock <= medicine.refillThreshold)
   const parts: { key: string; label: string; onClick: () => void }[] = [
     { key: 'doses', label: waiting ? waiting + (waiting === 1 ? ' dose waiting for a reply' : ' doses waiting for a reply') : 'No doses waiting', onClick: () => onView('medicines') },
@@ -86,6 +88,7 @@ function TodaySummary({ alerts, meds, tasks, nextAppt, time, onView, onAppt }: {
 
 export function Dashboard() {
   const { state, actions, now } = useApp()
+  const [taskFilter, setTaskFilter] = useState<'all' | 'needs' | 'waiting' | 'handling'>('all')
   const { activePatientId, alerts, tasks, medications, appointments } = state
   const patient = state.patients.find(item => item.id === activePatientId)
   const time = now()
@@ -105,7 +108,10 @@ export function Dashboard() {
   const doseItems = [...followups].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)).map(alert => ({ kind: 'alert' as const, alert }))
   const taskItems = [...openTasks].sort((a, b) => Number(Boolean(a.assigneeId)) - Number(Boolean(b.assigneeId))).slice(0, Math.max(0, 3 - doseItems.length)).map(task => ({ kind: 'task' as const, task }))
   const attention = [...doseItems, ...taskItems]
+  const allAttention = [...doseItems, ...openTasks.map(task => ({ kind: 'task' as const, task }))]
   const isUrgent = (item: (typeof attention)[number]) => item.kind === 'alert' ? item.alert.status === 'Missed' || lateBy(item.alert.scheduledDate, item.alert.scheduledTime, time) > 0 : !item.task.assigneeId || item.task.response === 'Declined'
+  const myTasks = openTasks.filter(task => task.assigneeId === state.currentUser?.id)
+  const filteredAttention = (taskFilter === 'all' ? attention : allAttention).filter(item => taskFilter === 'all' || (item.kind === 'task' ? taskFilter === 'needs' ? !item.task.assigneeId || item.task.response === 'Declined' : taskFilter === 'waiting' ? !!item.task.assigneeId && item.task.response === 'Waiting' : item.task.response === 'Accepted' : taskFilter === 'needs' ? !item.alert.assignedTo : taskFilter === 'handling' ? item.alert.status === 'In Progress' : item.alert.status === 'Assigned'))
   const unowned = openTasks.filter(task => !task.assigneeId).length + followups.filter(alert => !alert.assignedTo).length
   const shownTaskIds = new Set(attention.flatMap(item => item.kind === 'task' ? [item.task.id] : []))
   const shownMedIds = new Set(attention.flatMap(item => item.kind === 'alert' ? [item.alert.medicationId] : []))
@@ -154,33 +160,36 @@ export function Dashboard() {
       </div>
     </header>
     {patient?.parentChannel.reminders.status === 'Withdrawn' && <div className="cc-consent-note"><b>{patient.parentChannel.preferredName} asked to stop reminders.</b><p>Reminder messages are paused. A coordinator may send a new consent message.</p></div>}
+    {myTasks.length > 0 && <section className="cc-my-work" aria-labelledby="my-work-heading"><div><span className="cc-eyebrow">YOUR PART</span><h2 id="my-work-heading">Your care tasks</h2><p>{myTasks.filter(task => task.response === 'Waiting').length} awaiting your response · {myTasks.filter(task => task.response === 'Accepted').length} accepted</p></div><Button variant="secondary" onClick={() => actions.setView('tasks')}>Review your tasks</Button></section>}
     <section className="cc-surface cc-attention" aria-labelledby="attention-heading">
       <div className="cc-section-heading">
-        <div><h2 id="attention-heading">Needs attention now</h2><p className="cc-attention-sum">{count === 0 ? 'Nothing open' : count + ' open' + (unowned ? ' · ' + unowned + ' without an owner' : '')}</p></div>
-        {canWrite && <Button variant="secondary" className="cc-attention-add" onClick={() => actions.setView('tasks')}><PlusIcon className="w-4 h-4" />Add care task</Button>}
+        <div><span className="cc-dash-section-kicker">YOUR CARE PRIORITIES</span><h2 id="attention-heading">Needs attention now</h2><p className="cc-attention-sum">{count === 0 ? 'Nothing needs attention' : count + ' open' + (unowned ? ' · ' + unowned + ' needs an owner' : '')}</p></div>
+        {canWrite && <Button variant="secondary" className="cc-attention-add" onClick={() => actions.setView('tasks')}><PlusIcon className="w-4 h-4" />Review tasks</Button>}
       </div>
-      {state.commitError ? <div className="cc-empty"><ClockIcon className="w-7 h-7" /><strong>Some changes are not saved</strong><p>Use Retry in the persistent banner before relying on the latest update.</p></div> : !hasCarePlan ? <div className="cc-empty"><PillIcon className="w-7 h-7" /><strong>Start the care plan</strong><p>Add a medicine or one care task to begin.</p></div> : attention.length === 0 ? <div className="cc-empty"><CheckCircleIcon className="w-7 h-7" /><strong>You're all caught up</strong><p>{tomorrowFirstDose ? `Tomorrow’s first dose is ${tomorrowFirstDose.name} at ${fmt12h(tomorrowFirstDose.scheduleTime)}.` : 'There is no dose scheduled for tomorrow yet.'}</p></div> : attention.map(item => {
+      <div className="cc-filters" aria-label="Filter care items">{([['all','All'],['needs','Needs an owner'],['waiting','Awaiting response'],['handling','Being handled']] as const).map(([value,label]) => <button key={value} type="button" aria-pressed={taskFilter === value} onClick={() => setTaskFilter(value)}>{label}</button>)}</div>
+      <div className="cc-care-grid">{state.commitError ? <div className="cc-empty"><ClockIcon className="w-7 h-7" /><strong>Some changes are not saved</strong><p>Use Retry in the persistent banner before relying on the latest update.</p></div> : !hasCarePlan ? <div className="cc-empty"><PillIcon className="w-7 h-7" /><strong>Start the care plan</strong><p>Add a medicine or one care task to begin.</p></div> : attention.length === 0 ? <div className="cc-empty"><CheckCircleIcon className="w-7 h-7" /><strong>You're all caught up</strong><p>{tomorrowFirstDose ? `Tomorrow’s first dose is ${tomorrowFirstDose.name} at ${fmt12h(tomorrowFirstDose.scheduleTime)}.` : 'There is no dose scheduled for tomorrow yet.'}</p></div> : filteredAttention.length === 0 ? <div className="cc-filter-empty">No open items in this group. Choose another filter to see more.</div> : filteredAttention.map(item => {
         const isTask = item.kind === 'task'
         const id = isTask ? item.task.id : item.alert.id
         const owner = memberFor(isTask ? item.task.assigneeId : item.alert.assignedTo)
         const title = isTask ? item.task.title : item.alert.medicationName
-        return <div className={'cc-attention-row' + (isUrgent(item) ? '' : ' cc-attention-calm')} key={item.kind + id}>
-          <div className={'cc-icon-tile ' + (isTask ? 'cc-icon-amber' : '')}>{isTask ? <CheckCircleIcon className="w-5 h-5" /> : <PillIcon className="w-5 h-5" />}</div>
-          <div className="cc-attention-title"><h3>{title}</h3>{isTask && item.task.description && <p>{item.task.description}</p>}<span className="cc-due"><CalendarIcon className="w-4 h-4" />{isTask ? dueLabel(item.task.due) : 'Today · ' + fmt12h(item.alert.scheduledTime)}</span></div>
-          <div className="cc-owner"><span className="cc-label">Owner</span><div>{owner && <span className="cc-avatar cc-avatar-small">{owner.initials}</span>}<span>{owner?.name || 'Unassigned'}</span></div></div>
-          <div className="cc-row-status"><span className="cc-label">Status</span>{isTask ? <TaskStatus task={item.task} /> : <AlertSourceStatus alert={item.alert} />}</div>
-          <Button variant="secondary" className="cc-view-task" onClick={() => isTask ? actions.setView('tasks') : actions.openAlertDetail(id)}>{isTask ? (!owner && canWrite ? 'Assign' : 'View task') : 'Follow up'}</Button>
-        </div>
-      })}
+        return <article className={'cc-care-card' + (isUrgent(item) ? ' is-attention' : '')} key={item.kind + id}>
+          <div className="cc-care-card-top"><span className="cc-care-type"><span className="cc-care-type-icon">{isTask ? <CheckCircleIcon className="w-4 h-4" /> : <PillIcon className="w-4 h-4" />}</span>{isTask ? 'CARE TASK' : 'MEDICINE'}</span><span className="cc-care-time"><CalendarIcon className="w-4 h-4" />{isTask ? dueLabel(item.task.due) : 'Today · ' + fmt12h(item.alert.scheduledTime)}</span></div>
+          <div className="cc-care-content"><h3>{title}</h3>{isTask && item.task.description && <p>{item.task.description}</p>}</div>
+          <div className="cc-care-status">{isTask ? <TaskStatus task={item.task} /> : <AlertSourceStatus alert={item.alert} />}</div>
+          <div className="cc-care-footer"><div className="cc-care-person"><span className="cc-avatar cc-avatar-small">{owner?.initials || '—'}</span><span><small>RESPONSIBLE</small><strong>{owner?.name || 'Needs an owner'}</strong></span></div><Button variant="secondary" className="cc-care-action" onClick={() => { if (isTask) { focusTask(id); actions.setView('tasks') } else actions.openAlertDetail(id) }}>{isTask ? 'View task' : 'Follow up'} <span aria-hidden="true">↗</span></Button></div>
+        </article>
+      })}</div>
+      {taskFilter !== 'all' && <p className="cc-filter-note">Showing all open items matching this filter.</p>}
       {count > attention.length && <button className="cc-text-link cc-more" onClick={() => actions.setView(taskItems.length < openTasks.length ? 'tasks' : 'medicines')}>Review more care items <ChevronRightIcon className="w-4 h-4" /></button>}
     </section>
-    <TodaySummary alerts={todayAlerts} meds={activeMeds} tasks={patientTasks} nextAppt={nextAppt} time={time} onView={view => actions.setView(view)} onAppt={openAppointment} />
-    <DayStrip />
+    {state.isSample && <details className="cc-sample-tip"><summary>New here? Try the care loop</summary><p>Open the simulated parent phone, send a reply, then return to Today to see the change. Nothing is sent or saved.</p><Button variant="secondary" onClick={() => actions.togglePhonePane(true)}>Open parent phone</Button></details>}
+    <DayStrip hideQuote={Boolean(firstReply?.rawText && patient && canMemberSeeParentReplies(patient, state.currentUser?.id) && !state.dismissedFirstReplyPatientIds.includes(patient.id))} />
+    <details className="cc-dashboard-links"><summary>Explore today’s care</summary><TodaySummary alerts={todayAlerts} meds={activeMeds} tasks={patientTasks} nextAppt={nextAppt} time={time} onView={view => actions.setView(view)} onAppt={openAppointment} /></details>
     {firstReply?.rawText && patient && canMemberSeeParentReplies(patient, state.currentUser?.id) && !state.dismissedFirstReplyPatientIds.includes(patient.id) && <Card className="cc-first-reply"><div><strong>{patient.parentChannel.preferredName} replied for the first time</strong><p>“{firstReply.rawText}” · {replyAlert?.medicationName ?? 'Medicine reminder'} · {shortTime(firstReply.at)}</p></div><Button variant="ghost" onClick={() => actions.dismissFirstReply(patient.id)}>Dismiss</Button></Card>}
-    {nudge && <Card className="p-5 mb-4"><div className="flex items-start justify-between gap-4"><div><strong className="text-slate-800">{nudge.title}</strong><p className="text-sm text-slate-500 mt-1">{nudge.detail}</p></div><Button variant="ghost" onClick={() => dismiss(`nudge:${nudge.id}`)}>{nudge.secondaryLabel}</Button></div>{nudge.primaryLabel && <Button variant="secondary" className="mt-4" onClick={() => { if (nudge.action === 'resend-consent' && patient) actions.sendParentConsent(patient.id); else if (nudge.view) actions.setView(nudge.view) }}>{nudge.primaryLabel}</Button>}</Card>}
+    {nudge && <section className="cc-insight cc-dash-nudge" aria-label="Suggested next step"><div className="cc-insight-icon" aria-hidden="true"><ClockIcon className="w-5 h-5" /></div><div className="cc-insight-copy"><span className="cc-kicker">SUGGESTED FOR YOUR CIRCLE</span><h2>{nudge.title}</h2><p>{nudge.detail}</p><div className="cc-insight-actions">{nudge.primaryLabel && <Button onClick={() => { if (nudge.action === 'resend-consent' && patient) actions.sendParentConsent(patient.id); else if (nudge.view) actions.setView(nudge.view) }}>{nudge.primaryLabel}</Button>}<Button variant="ghost" onClick={() => dismiss(`nudge:${nudge.id}`)}>{nudge.secondaryLabel}</Button></div></div></section>}
     {!setupHidden && setup.complete && <details className="cc-milestones"><summary>Milestones · {setup.milestones.filter(item => item.complete).length} of {setup.milestones.length} in place</summary><div className="grid sm:grid-cols-2 gap-2 mt-3">{setup.milestones.map(item => <div key={item.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><span className="font-semibold">{item.complete ? 'Done' : 'Ahead'}</span> · {item.title}</div>)}</div><button type="button" className="cc-text-link mt-2" onClick={() => dismiss('setup-checklist')}>Hide milestones for 14 days</button></details>}
-    {!setupHidden && !setup.complete && <Card className="p-5 mb-4"><div className="flex items-start justify-between gap-4"><div><strong className="text-slate-800">{setup.complete ? 'Milestones' : `Setting up - ${setup.completed} of 4`}</strong><p className="text-sm text-slate-500 mt-1">{setup.complete ? 'What your circle has in place so far.' : 'A short path to a useful care circle.'}</p></div><Button variant="ghost" onClick={() => dismiss('setup-checklist')}>Hide for 14 days</Button></div><div className="grid sm:grid-cols-2 gap-2 mt-4">{setup.complete ? setup.milestones.map(item => <div key={item.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><span className="font-semibold">{item.complete ? 'Done' : 'Ahead'}</span> · {item.title}</div>) : setup.steps.map(item => <Button variant="secondary" key={item.id} onClick={() => actions.setView(item.view)} className="justify-start text-left"><span className="font-semibold">{item.complete ? 'Done' : 'Next'}</span> · {item.title}</Button>)}</div></Card>}
-    {nextStep && <Card className="p-5 my-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Next step</p><div className="flex items-start justify-between gap-4 mt-2"><div><strong className="text-slate-800">{nextStep.title}</strong><p className="text-sm text-slate-500 mt-1">{nextStep.detail}</p></div><div className="flex gap-2"><Button variant="ghost" onClick={() => dismiss(`next-step:${nextStep.id}`)}>Not now</Button><Button onClick={() => actions.setView(nextStep.view)}>Open</Button></div></div></Card>}
+    {!setupHidden && !setup.complete && <Card className="cc-setup-card p-5 mb-4"><div className="flex items-start justify-between gap-4"><div><strong className="text-slate-800">{setup.complete ? 'Milestones' : `Setting up - ${setup.completed} of 4`}</strong><p className="text-sm text-slate-500 mt-1">{setup.complete ? 'What your circle has in place so far.' : 'A short path to a useful care circle.'}</p></div><Button variant="ghost" onClick={() => dismiss('setup-checklist')}>Hide for 14 days</Button></div><div className="grid sm:grid-cols-2 gap-2 mt-4">{setup.complete ? setup.milestones.map(item => <div key={item.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><span className="font-semibold">{item.complete ? 'Done' : 'Ahead'}</span> · {item.title}</div>) : setup.steps.map(item => <Button variant="secondary" key={item.id} onClick={() => actions.setView(item.view)} className="justify-start text-left"><span className="font-semibold">{item.complete ? 'Done' : 'Next'}</span> · {item.title}</Button>)}</div></Card>}
+    {nextStep && setupHidden && <Card className="cc-next-step p-5 my-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Next step</p><div className="flex items-start justify-between gap-4 mt-2"><div><strong className="text-slate-800">{nextStep.title}</strong><p className="text-sm text-slate-500 mt-1">{nextStep.detail}</p></div><div className="flex gap-2"><Button variant="ghost" onClick={() => dismiss(`next-step:${nextStep.id}`)}>Not now</Button><Button onClick={() => actions.setView(nextStep.view)}>Open</Button></div></div></Card>}
     <div className="cc-dashboard-grid">
       <div className="cc-main-column">
         {(planMeds.length > 0 || planTasks.length > 0) && <section className="cc-surface cc-plan" aria-labelledby="responsibility-heading">
