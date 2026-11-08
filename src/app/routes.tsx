@@ -13,9 +13,10 @@ import { CareCircle, Tasks } from '../pages/Management'
 import { Appointments } from '../pages/Appointments'
 import { Timeline } from '../pages/Timeline'
 import { SessionExpiredOverlay } from '../components/SessionExpiredOverlay'
+import { GuidedTour } from '../components/GuidedTour'
 
 function AppProviderRoute() {
-  return <GateProvider><AppProvider><Outlet /><SessionExpiredOverlay /></AppProvider></GateProvider>
+  return <GateProvider><AppProvider><Outlet /><GuidedTour /><SessionExpiredOverlay /></AppProvider></GateProvider>
 }
 
 function SampleProviderRoute() {
