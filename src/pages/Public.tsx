@@ -4,6 +4,7 @@ import { useAuthStatus } from '../auth/AuthStatus'
 import { Button, Card, Dialog } from '../components/ui'
 import { HeartIcon, PillIcon, UsersIcon, HomeIcon, ChatBubbleIcon, CheckCircleIcon, CalendarIcon } from '../components/icons'
 import { useApp } from '../context'
+import { GuidedTour } from '../components/GuidedTour'
 import { AlertDetailModal } from '../components/AlertDetailModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { PhonePane } from '../components/PhonePane'
@@ -84,6 +85,7 @@ export function SampleShell() {
     {state.confirmConfig && <ConfirmModal />}
     <PhonePane />
     <ToastContainer />
+    <GuidedTour />
     {ownCircleView && <Dialog title={VIEW_NAMES[ownCircleView]?.[0] ?? 'This page is in your own circle'} onClose={() => setOwnCircleView(null)}>
       <p className="text-sm text-slate-600">The sample shows Today, Medicines, Tasks, Visits and Circle. Log in or create an account to open {VIEW_NAMES[ownCircleView]?.[1] ?? 'this page'} for your own family.</p>
       <div className="grid grid-cols-2 gap-3 mt-5">
