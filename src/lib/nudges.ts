@@ -27,7 +27,7 @@ export function prioritizedDashboardNudge(state: AppState, now = new Date(), ses
   const patient = state.patients.find(item => item.id === state.activePatientId)
   const reminders = patient?.parentChannel.reminders
   if (reminders?.status === 'Asked' && Date.parse(reminders.changedAt) <= now.getTime() - 2 * 24 * 60 * 60 * 1000 && !hidden(`consent:${state.activePatientId}`)) {
-    return { id: `consent:${state.activePatientId}`, title: 'Reminder consent is still pending', detail: `${patient?.parentChannel.preferredName ?? 'The parent'} has not replied. You can resend the same request without changing anything.`, primaryLabel: 'Send it again', secondaryLabel: 'Not now', action: 'resend-consent' }
+    return { id: `consent:${state.activePatientId}`, title: 'Reminder consent is still pending', detail: `${patient?.parentChannel.preferredName ?? 'The parent'} has not replied. You can resend the same request without changing anything.`, primaryLabel: 'Review request', secondaryLabel: 'Not now', view: 'profile' }
   }
   return undefined
 }
