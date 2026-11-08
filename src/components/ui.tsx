@@ -1,3 +1,4 @@
+import '../shared-refresh.css'
 import { useEffect, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
 import { BellIcon, CalendarIcon, CheckCircleIcon, ClockIcon, FolderIcon, HeartIcon, PillIcon, UserIcon, UsersIcon, XMarkIcon } from './icons'
 
@@ -32,7 +33,7 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
 
 export function Button({ className = '', variant = 'primary', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost' }) {
   const styles = {
-    primary: 'bg-[#477E78] text-white hover:bg-[#386962]',
+    primary: 'bg-[#245F49] text-white hover:bg-[#194A39]',
     secondary: 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50',
     danger: 'bg-rose-600 text-white hover:bg-rose-700',
     ghost: 'text-slate-600 hover:bg-slate-100',
@@ -44,7 +45,7 @@ export function Field({ label, hint, error, ...props }: InputHTMLAttributes<HTML
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
-      <input className={`mt-1.5 w-full min-h-11 px-3.5 rounded-xl bg-white border text-sm outline-none focus:ring-2 focus:ring-[#477E78] ${error ? 'border-rose-400' : 'border-slate-200'}`} {...props} />
+      <input className={`mt-1.5 w-full min-h-11 px-3.5 rounded-xl bg-white border text-sm outline-none focus:ring-2 focus:ring-[#4F8A68] ${error ? 'border-rose-400' : 'border-slate-200'}`} {...props} />
       {(error || hint) && <span className={`block mt-1 text-xs ${error ? 'text-rose-600' : 'text-slate-400'}`}>{error || hint}</span>}
     </label>
   )
@@ -54,7 +55,7 @@ export function SelectField({ label, children, ...props }: SelectHTMLAttributes<
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
-      <select className="mt-1.5 w-full min-h-11 px-3.5 rounded-xl bg-white border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-[#477E78]" {...props}>{children}</select>
+      <select className="mt-1.5 w-full min-h-11 px-3.5 rounded-xl bg-white border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-[#4F8A68]" {...props}>{children}</select>
     </label>
   )
 }
@@ -63,7 +64,7 @@ export function TextAreaField({ label, ...props }: TextareaHTMLAttributes<HTMLTe
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
-      <textarea className="mt-1.5 w-full px-3.5 py-3 rounded-xl bg-white border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-[#477E78] resize-y" rows={3} {...props} />
+      <textarea className="mt-1.5 w-full px-3.5 py-3 rounded-xl bg-white border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-[#4F8A68] resize-y" rows={3} {...props} />
     </label>
   )
 }
@@ -85,8 +86,8 @@ export function Dialog({ title, onClose, children, wide = false }: { title: stri
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-5" role="dialog" aria-modal="true" aria-label={title}>
       <button className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} aria-label="Close dialog" />
-      <div className={`relative z-10 bg-[#fffefc] rounded-3xl shadow-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} max-h-[88vh] overflow-y-auto`}>
-        <div className="sticky top-0 bg-white flex items-center justify-between px-6 py-4 border-b border-slate-100 z-10">
+      <div className={`cc-dialog-panel relative z-10 bg-[#fffefc] rounded-3xl shadow-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} max-h-[88vh] overflow-y-auto`}>
+        <div className="cc-dialog-header sticky top-0 bg-white flex items-center justify-between px-6 py-4 border-b border-slate-100 z-10">
           <h2 className="font-semibold text-slate-800">{title}</h2>
           <button ref={closeRef} onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100" aria-label="Close"><XMarkIcon className="w-5 h-5" /></button>
         </div>
