@@ -1,33 +1,19 @@
 import '../shared-refresh.css'
 import { useEffect, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { BellIcon, CalendarIcon, CheckCircleIcon, ClockIcon, FolderIcon, HeartIcon, PillIcon, UserIcon, UsersIcon, XMarkIcon } from './icons'
-
-function headerIcon(title: string) {
-  const text = title.toLowerCase()
-  if (text.includes('task')) return CheckCircleIcon
-  if (text.includes('medic')) return PillIcon
-  if (text.includes('appoint') || text.includes('digest')) return CalendarIcon
-  if (text.includes('document') || text.includes('record')) return FolderIcon
-  if (text.includes('timeline')) return ClockIcon
-  if (text.includes('notific')) return BellIcon
-  if (text.includes('circle')) return UsersIcon
-  if (text.includes('patient') || text.includes('profile') || text.includes('account')) return UserIcon
-  return HeartIcon
-}
+import { XMarkIcon } from './icons'
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
-  const Icon = headerIcon(title)
   return (
-    <div className="cc-page-header flex items-start justify-between gap-4">
+    <header className="cc-page-header cc-page-hero flex items-start justify-between gap-4">
       <div className="cc-page-title">
-        <span className="cc-page-icon" aria-hidden="true"><Icon className="w-6 h-6" /></span>
         <div>
+          <span className="cc-page-hero-eyebrow">YOUR CARE CIRCLE</span>
           <h1 className="text-2xl font-bold tracking-tight text-slate-800">{title}</h1>
           <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
         </div>
       </div>
       {action}
-    </div>
+    </header>
   )
 }
 
