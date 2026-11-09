@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { useApp } from '../context'
 import type { View } from '../types'
+import { recordProductEvent } from '../lib/productMeasurement'
 import './guided-tour.css'
 
 type TourStep = { label: string; title: string; detail: string; view?: View; samplePath?: string }
@@ -70,6 +71,7 @@ export function GuidedTour() {
   const [initializedKey, setInitializedKey] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const heading = useRef<HTMLHeadingElement>(null)
+  const autoStarts = useRef(new Set<string>())
   const isSample = state.isSample
   const eligible = isSample
     ? location.pathname === '/sample' || location.pathname.startsWith('/sample/')
@@ -92,7 +94,11 @@ export function GuidedTour() {
     setInitializedKey(storageKey)
     setStepIndex(0)
     setOpen(!seen)
-  }, [eligible, initializedKey, isSample, storageKey])
+    if (!seen && !autoStarts.current.has(storageKey)) {
+      autoStarts.current.add(storageKey)
+      recordProductEvent(state.currentUser?.id, isSample, 'tour_started')
+    }
+  }, [eligible, initializedKey, isSample, storageKey, state.currentUser?.id])
 
   useEffect(() => {
     const active = eligible && open && initializedKey === storageKey
@@ -130,7 +136,7 @@ export function GuidedTour() {
   }
 
   if (!eligible || initializedKey !== storageKey || modalOpen || state.sessionExpired) return null
-  if (!open) return <button type="button" className="cc-tour-launch" onClick={() => { setStepIndex(0); setOpen(true) }} aria-label="Start the CareCircle tour"><span aria-hidden="true">✳</span> Take a tour</button>
+  if (!open) return <button type="button" className="cc-tour-launch" onClick={() => { recordProductEvent(state.currentUser?.id, isSample, 'tour_started'); setStepIndex(0); setOpen(true) }} aria-label="Start the CareCircle tour"><span aria-hidden="true">✳</span> Take a tour</button>
 
   const step = steps[stepIndex]
   const last = stepIndex === steps.length - 1
@@ -138,6 +144,6 @@ export function GuidedTour() {
     <div className="cc-tour-top"><span className="cc-tour-mark" aria-hidden="true">✳</span><span>{step.label}</span><button type="button" className="cc-tour-skip" onClick={finishTour} aria-label="Skip the tour">Skip tour <span aria-hidden="true">×</span></button></div>
     <div className="cc-tour-copy" aria-live="polite" aria-atomic="true"><h2 ref={heading} tabIndex={-1}>{step.title}</h2><p>{step.detail}</p></div>
     <div className="cc-tour-progress" aria-label={`Step ${stepIndex + 1} of ${steps.length}`}><span>STEP {stepIndex + 1} OF {steps.length}</span><div aria-hidden="true">{steps.map((_, index) => <i key={index} className={index <= stepIndex ? 'is-filled' : ''} />)}</div></div>
-    <div className="cc-tour-actions"><button type="button" className="cc-tour-back" onClick={() => goToStep(stepIndex - 1)} disabled={stepIndex === 0}>Back</button><button type="button" className="cc-tour-next" onClick={() => last ? finishTour() : goToStep(stepIndex + 1)}>{last ? 'Finish tour' : stepIndex === 0 ? 'Show me around' : 'Next'} <span aria-hidden="true">→</span></button></div>
+    <div className="cc-tour-actions"><button type="button" className="cc-tour-back" onClick={() => goToStep(stepIndex - 1)} disabled={stepIndex === 0}>Back</button><button type="button" className="cc-tour-next" onClick={() => { if (last) { recordProductEvent(state.currentUser?.id, isSample, 'tour_finished'); finishTour() } else goToStep(stepIndex + 1) }}>{last ? 'Finish tour' : stepIndex === 0 ? 'Show me around' : 'Next'} <span aria-hidden="true">→</span></button></div>
   </aside>
 }
