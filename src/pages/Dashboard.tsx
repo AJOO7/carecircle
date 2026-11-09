@@ -6,12 +6,13 @@ import { CalendarIcon, CheckCircleIcon, ChevronRightIcon, PillIcon, ClockIcon } 
 import { AlertSourceStatus } from '../components/AlertSourceStatus'
 import { Button, Card } from '../components/ui'
 import { canMemberSeeParentReplies, eventTextForMember, shortTime } from '../lib/careEvents'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CareEvent, CareTask, Appointment, Medication, MedicationAlert, View } from '../types'
 import { deriveStage, isNewInvitee } from '../lib/stage'
-import { prioritizedDashboardNudge } from '../lib/nudges'
-import { dismissFor14Days } from '../lib/dismissals'
+import { dismissDashboardNudge, isNudgeCooldownActive, prioritizedDashboardNudge } from '../lib/nudges'
 import { CareJourney } from '../components/CareJourney'
+import { useGuidedTourActive } from '../components/GuidedTour'
+import { recordProductEvent } from '../lib/productMeasurement'
 import { clockLabel as fmt12h, clockOf, dayAndClock, lateBy } from '../lib/time'
 function dueLabel(value: string) {
   const date = new Date(value)
@@ -118,11 +119,28 @@ export function Dashboard() {
   const greeting = time.getHours() < 12 ? 'Good morning' : time.getHours() < 17 ? 'Good afternoon' : 'Good evening'
   const firstName = state.currentUser?.name.split(' ')[0] ?? ''
   const stage = deriveStage(state)
-  const [sessionDismissed, setSessionDismissed] = useState<string[]>([])
-  const nudge = prioritizedDashboardNudge(state, time, sessionDismissed)
+  const [, refreshSuggestions] = useState(0)
+  const tourActive = useGuidedTourActive()
+  const nudge = tourActive ? undefined : prioritizedDashboardNudge(state, time)
+  const nudgeRef = useRef<HTMLElement>(null)
+  const visibleNudgeKey = nudge ? `${state.activeCircleId}:${state.activePatientId}:${nudge.id}` : ''
+  useEffect(() => {
+    const node = nudgeRef.current
+    if (!node || !nudge || typeof IntersectionObserver === 'undefined') return
+    let recorded = false
+    const observer = new IntersectionObserver(entries => {
+      if (!recorded && entries.some(entry => entry.isIntersecting && entry.intersectionRatio >= 0.5)) {
+        recorded = true
+        recordProductEvent(state.currentUser?.id, state.isSample, 'nudge_shown')
+      }
+    }, { threshold: 0.5 })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [visibleNudgeKey, state.currentUser?.id, state.isSample])
   const dismiss = (id: string) => {
-    setSessionDismissed(current => [...new Set([...current, id])])
-    if (!state.isSample) dismissFor14Days(id, time)
+    dismissDashboardNudge(state, id, time)
+    refreshSuggestions(current => current + 1)
+    recordProductEvent(state.currentUser?.id, state.isSample, 'nudge_dismissed')
   }
   const patientTasks = tasks.filter(task => task.patientId === activePatientId)
   const hasCarePlan = activeMeds.length > 0 || patientTasks.length > 0
@@ -156,8 +174,8 @@ export function Dashboard() {
     </div>
     {state.isSample && <details className="cc-sample-tip"><summary>New here? Try the care loop</summary><p>Open the simulated parent phone, send a reply, then return to Today to see the change. Nothing is sent or saved.</p><Button variant="secondary" onClick={() => actions.togglePhonePane(true)}>Open parent phone</Button></details>}
     {firstReply?.rawText && patient && canMemberSeeParentReplies(patient, state.currentUser?.id) && !state.dismissedFirstReplyPatientIds.includes(patient.id) && <Card className="cc-first-reply"><div><strong>{patient.parentChannel.preferredName} replied for the first time</strong><p>“{firstReply.rawText}” · {replyAlert?.medicationName ?? 'Medicine reminder'} · {shortTime(firstReply.at)}</p></div><Button variant="ghost" onClick={() => actions.dismissFirstReply(patient.id)}>Dismiss</Button></Card>}
-    {nudge && <section className="cc-insight cc-dash-nudge" aria-label="Suggested next step"><div className="cc-insight-icon" aria-hidden="true"><ClockIcon className="w-5 h-5" /></div><div className="cc-insight-copy"><span className="cc-kicker">SUGGESTED FOR YOUR CIRCLE</span><h2>{nudge.title}</h2><p>{nudge.detail}</p><div className="cc-insight-actions">{nudge.primaryLabel && <Button onClick={() => { if (nudge.action === 'resend-consent' && patient) actions.sendParentConsent(patient.id); else if (nudge.view) actions.setView(nudge.view) }}>{nudge.primaryLabel}</Button>}<Button variant="ghost" onClick={() => dismiss(`nudge:${nudge.id}`)}>{nudge.secondaryLabel}</Button></div></div></section>}
-    <CareJourney />
+    {nudge && <section ref={nudgeRef} className="cc-insight cc-dash-nudge" aria-label="Suggested next step"><div className="cc-insight-icon" aria-hidden="true"><ClockIcon className="w-5 h-5" /></div><div className="cc-insight-copy"><span className="cc-kicker">SUGGESTED FOR YOUR CIRCLE</span><h2>{nudge.title}</h2><p>{nudge.detail}</p><div className="cc-insight-actions">{nudge.primaryLabel && <Button onClick={() => { recordProductEvent(state.currentUser?.id, state.isSample, 'nudge_accepted'); if (nudge.action === 'resend-consent' && patient) actions.sendParentConsent(patient.id); else if (nudge.view) actions.setView(nudge.view) }}>{nudge.primaryLabel}</Button>}<Button variant="ghost" onClick={() => dismiss(nudge.id)}>{nudge.secondaryLabel}</Button></div></div></section>}
+    <CareJourney suppressSuggestion={Boolean(nudge) || isNudgeCooldownActive(state, time)} />
     <details className="cc-calm-details"><summary>More care details <span aria-hidden="true">+</span></summary><div className="cc-calm-details-content">
     <TodaySummary alerts={todayAlerts} meds={activeMeds} tasks={patientTasks} nextAppt={nextAppt} time={time} onView={view => actions.setView(view)} onAppt={openAppointment} />
     <div className="cc-dashboard-grid">
