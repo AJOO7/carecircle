@@ -4,6 +4,16 @@
 .cc-journey-heading h2{margin:5px 0 0;color:#243f36;font-size:20px;font-weight:700;letter-spacing:-.025em}
 .cc-journey-hide{padding:5px 0;color:#70877a;font-size:12px;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
 .cc-journey-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.9fr);gap:22px;padding:19px 24px 24px}
+.cc-journey-body-progress-only{grid-template-columns:1fr}
+.cc-journey-recap{border-top:1px solid #edf1e9;padding:0 24px;color:#587067;font-size:12px}
+.cc-journey-recap summary{display:flex;justify-content:space-between;align-items:center;min-height:43px;cursor:pointer;font-weight:700}
+.cc-journey-recap summary span{font-weight:500;color:#819489}
+.cc-journey-recap summary:focus-visible{outline:2px solid #237255;outline-offset:2px}
+.cc-journey-recap-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:0 0 12px}
+.cc-journey-recap-grid>div{display:flex;flex-direction:column;gap:4px;border-radius:14px;background:#f3f7ef;padding:12px}
+.cc-journey-recap-grid strong{color:#315b48;font-size:21px;line-height:1}
+.cc-journey-recap-grid span{color:#587067;font-size:11px;line-height:1.4}
+.cc-journey-recap>p{padding:0 0 16px;color:#70877a;line-height:1.45}
 .cc-journey-suggestion{display:flex;gap:14px;align-items:flex-start;padding:20px;border-radius:18px;background:linear-gradient(135deg,#edf5e9,#f8f8ed)}
 .cc-journey-spark{display:grid;place-items:center;flex:none;width:40px;height:40px;border-radius:14px;background:#d9e9d9;color:#49755a;font-size:23px}
 .cc-journey-suggestion h3{margin:5px 0;color:#234d3d;font-size:17px;font-weight:700;letter-spacing:-.02em}
@@ -16,4 +26,4 @@
 .cc-journey button:focus-visible{outline:2px solid #237255;outline-offset:3px}
 .cc-journey-milestones{border-top:1px solid #edf1e9;padding:0 24px;color:#587067;font-size:12px}.cc-journey-milestones summary{cursor:pointer;min-height:43px;display:flex;align-items:center;font-weight:700}.cc-journey-milestones summary:focus-visible{outline:2px solid #237255;outline-offset:2px}.cc-journey-milestones ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 20px;padding:0 0 17px;list-style:none}.cc-journey-milestones li{display:flex;gap:6px;align-items:center}.cc-journey-milestones small{margin-left:auto;color:#82958a}.cc-journey-milestones p{padding:0 0 16px;color:#82958a}
 @media(max-width:700px){.cc-journey-heading{padding:19px 18px 0}.cc-journey-body{grid-template-columns:1fr;gap:18px;padding:16px 18px 20px}.cc-journey-suggestion{padding:17px}.cc-journey-heading h2{font-size:18px}}
-@media(max-width:500px){.cc-journey-milestones{padding:0 18px}.cc-journey-milestones ul{grid-template-columns:1fr}}
+@media(max-width:500px){.cc-journey-milestones,.cc-journey-recap{padding:0 18px}.cc-journey-milestones ul{grid-template-columns:1fr}.cc-journey-recap-grid{grid-template-columns:1fr}.cc-journey-recap-grid>div{flex-direction:row;align-items:center;gap:12px}}
