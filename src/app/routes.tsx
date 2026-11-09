@@ -14,9 +14,10 @@ import { Appointments } from '../pages/Appointments'
 import { Timeline } from '../pages/Timeline'
 import { SessionExpiredOverlay } from '../components/SessionExpiredOverlay'
 import { GuidedTour } from '../components/GuidedTour'
+import { ProductMeasurementObserver } from '../components/ProductMeasurement'
 
 function AppProviderRoute() {
-  return <GateProvider><AppProvider><Outlet /><GuidedTour /><SessionExpiredOverlay /></AppProvider></GateProvider>
+  return <GateProvider><AppProvider><Outlet /><GuidedTour /><ProductMeasurementObserver /><SessionExpiredOverlay /></AppProvider></GateProvider>
 }
 
 function SampleProviderRoute() {
